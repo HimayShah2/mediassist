@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MediAssist Pro | Live Progress</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --glass-bg: rgba(30, 41, 59, 0.7);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --accent-glow: rgba(56, 189, 248, 0.5);
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --status-done: #10b981;
+            --status-progress: #f59e0b;
+            --status-pending: #ef4444;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Outfit', sans-serif;
+            background: var(--bg-color);
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(56, 189, 248, 0.15), transparent 25%),
+                radial-gradient(circle at 85% 30%, rgba(139, 92, 246, 0.15), transparent 25%);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .header {
+            margin-top: 3rem;
+            text-align: center;
+            animation: fadeInDown 0.8s ease-out;
+        }
+
+        .header h1 {
+            font-size: 3rem;
+            margin: 0;
+            background: linear-gradient(135deg, #38bdf8, #8b5cf6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 30px var(--accent-glow);
+        }
+
+        .header p {
+            color: var(--text-muted);
+            font-size: 1.2rem;
+            margin-top: 0.5rem;
+        }
+
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            width: 100%;
+            max-width: 1200px;
+            padding: 2rem;
+            box-sizing: border-box;
+            animation: fadeInUp 1s ease-out;
+        }
+
+        .card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            padding: 2rem;
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; height: 4px;
+            background: linear-gradient(90deg, #ef4444, #f59e0b);
+            opacity: 0.8;
+        }
+
+        .card.active::before {
+            background: linear-gradient(90deg, #38bdf8, #8b5cf6);
+            animation: pulse-glow 2s infinite;
+        }
+        
+        .card.done::before {
+            background: linear-gradient(90deg, #10b981, #34d399);
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .card h2 {
+            margin: 0 0 1rem 0;
+            font-size: 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .badge {
+            font-size: 0.8rem;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .badge.done { background: rgba(16, 185, 129, 0.2); color: var(--status-done); }
+        .badge.active { background: rgba(56, 189, 248, 0.2); color: #38bdf8; }
+        .badge.pending { background: rgba(239, 68, 68, 0.2); color: var(--status-pending); }
+
+        .task-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .task-item {
+            margin: 10px 0;
+            font-size: 1rem;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            transition: color 0.2s ease;
+        }
+
+        .task-item:hover {
+            color: var(--text-main);
+        }
+
+        .task-item::before {
+            content: '';
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 12px;
+            background: var(--status-pending);
+            box-shadow: 0 0 10px var(--status-pending);
+        }
+
+        .task-item.done::before {
+            background: var(--status-done);
+            box-shadow: 0 0 10px var(--status-done);
+        }
+
+        .task-item.in-progress::before {
+            background: var(--status-progress);
+            box-shadow: 0 0 10px var(--status-progress);
+        }
+
+        .overall-progress {
+            width: 100%;
+            max-width: 800px;
+            margin: 2rem auto;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            padding: 1.5rem;
+            backdrop-filter: blur(10px);
+            text-align: center;
+        }
+
+        .progress-bar-container {
+            width: 100%;
+            height: 12px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 10px;
+            margin-top: 1rem;
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            height: 100%;
+            width: 15%; /* Update this dynamically */
+            background: linear-gradient(90deg, #38bdf8, #8b5cf6);
+            border-radius: 10px;
+            transition: width 1s ease-in-out;
+            box-shadow: 0 0 20px rgba(139, 92, 246, 0.8);
+        }
+
+        @keyframes fadeInDown {
+            from { opacity: 0; transform: translateY(-30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes pulse-glow {
+            0% { box-shadow: 0 0 10px rgba(56, 189, 248, 0.4); }
+            50% { box-shadow: 0 0 20px rgba(139, 92, 246, 0.6); }
+            100% { box-shadow: 0 0 10px rgba(56, 189, 248, 0.4); }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>MediAssist Pro</h1>
+        <p>Live Development Dashboard</p>
+    </div>
+
+    <div class="overall-progress">
+        <h2>Overall Completion: 100% (Phase 1)</h2>
+        <div class="progress-bar-container">
+            <div class="progress-bar" style="width: 100%;"></div>
+        </div>
+    </div>
+
+    <div class="dashboard">
+        <!-- Phase 0 -->
+        <div class="card done">
+            <h2>Phase 0: Core <span class="badge done">Completed</span></h2>
+            <ul class="task-list">
+                <li class="task-item done">Project Structure & Configs</li>
+                <li class="task-item done">NIM Key Manager Proxy</li>
+                <li class="task-item done">Dev Server Dependencies</li>
+                <li class="task-item done">Pydantic Models</li>
+                <li class="task-item done">DB Connect & Patient CRUD</li>
+                <li class="task-item done">UI Framework Skeleton</li>
+                <li class="task-item done">Tests & Verification</li>
+            </ul>
+        </div>
+
+        <!-- Phase 1 -->
+        <div class="card done">
+            <h2>Phase 1: RAG <span class="badge done">Completed</span></h2>
+            <ul class="task-list">
+                <li class="task-item done">PDF Ingestion Pipeline</li>
+                <li class="task-item done">Embedder Integration</li>
+                <li class="task-item done">Reranker System</li>
+            </ul>
+        </div>
+
+        <!-- Phase 2 -->
+        <div class="card done">
+            <h2>Phase 2: Questionnaire <span class="badge done">Completed</span></h2>
+            <ul class="task-list">
+                <li class="task-item done">State Machine Logic</li>
+                <li class="task-item done">Emergency Red-Flag Detector</li>
+                <li class="task-item done">Dynamic UI Components</li>
+            </ul>
+        </div>
+
+        <!-- Phase 3 -->
+        <div class="card done">
+            <h2>Phase 3: Reports <span class="badge done">Completed</span></h2>
+            <ul class="task-list">
+                <li class="task-item done">PDF Brief Generator</li>
+                <li class="task-item done">Physician Summary Views</li>
+                <li class="task-item done">Raw Data Explorer</li>
+            </ul>
+        </div>
+
+        <!-- Phase 4 -->
+        <div class="card done">
+            <h2>Phase 4: Data Port <span class="badge done">Completed</span></h2>
+            <ul class="task-list">
+                <li class="task-item done">CSV, Excel, HL7, FHIR Imports</li>
+                <li class="task-item done">PDF OCR Record Extractor</li>
+                <li class="task-item done">Vaccine Gap Tracker</li>
+            </ul>
+        </div>
+
+        <!-- Phase 5 -->
+        <div class="card done">
+            <h2>Phase 5: Specialties <span class="badge done">Completed</span></h2>
+            <ul class="task-list">
+                <li class="task-item done">7 Visit Types & 21 Specialties</li>
+                <li class="task-item done">Clinical Tools (PHQ-9, GCS)</li>
+                <li class="task-item done">Multilingual UI (EN, FR, AR)</li>
+            </ul>
+        </div>
+
+        <!-- Phase 6 -->
+        <div class="card done">
+            <h2>Phase 6: Release <span class="badge done">Completed</span></h2>
+            <ul class="task-list">
+                <li class="task-item done">SQLCipher / Fernet Encryption</li>
+                <li class="task-item done">Immutable Audit Logging</li>
+                <li class="task-item done">PyInstaller/NSIS Packager</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        // Simple script to refresh the page every 30 seconds to simulate a live updating dashboard
+        // In a real scenario, this could poll a JSON endpoint or use WebSockets.
+        setTimeout(() => {
+            window.location.reload();
+        }, 30000);
+    </script>
+</body>
+</html>

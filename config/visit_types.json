@@ -1,0 +1,102 @@
+{
+    "visit_types": [
+        {
+            "id": "VACCINATION",
+            "display_name": "Vaccination Visit",
+            "description": "Routine and catch-up immunization visits for all age groups",
+            "icon": "syringe.png",
+            "color": "#4CAF50",
+            "rag_collections": ["vaccination_schedules", "vaccine_contraindications", "adverse_reactions"],
+            "llm_role": "You are a vaccination specialist nurse AI assistant. Focus on immunization schedules, contraindications, proper administration techniques, cold chain requirements, and adverse event monitoring. Always verify patient age, weight, and allergy history before recommending any vaccine.",
+            "round_question_counts": {
+                "round_1": 5,
+                "round_2": 3,
+                "round_3": 2
+            }
+        },
+        {
+            "id": "GENERAL",
+            "display_name": "General Consultation",
+            "description": "General medical consultation for common complaints and wellness checks",
+            "icon": "stethoscope.png",
+            "color": "#2196F3",
+            "rag_collections": ["general_medicine", "clinical_guidelines", "drug_interactions"],
+            "llm_role": "You are a general medicine nurse AI assistant. Conduct a thorough symptom assessment using OPQRST methodology. Gather comprehensive history including onset, duration, severity, aggravating and relieving factors. Screen for red-flag symptoms that require immediate physician attention.",
+            "round_question_counts": {
+                "round_1": 6,
+                "round_2": 4,
+                "round_3": 3
+            }
+        },
+        {
+            "id": "SPECIFIC",
+            "display_name": "Specific Complaint",
+            "description": "Focused visit for a specific medical complaint or condition",
+            "icon": "target.png",
+            "color": "#FF9800",
+            "rag_collections": ["clinical_guidelines", "drug_interactions", "differential_diagnosis"],
+            "llm_role": "You are a specialist triage nurse AI assistant. Focus deeply on the specific complaint presented. Use targeted questioning to narrow differential diagnoses. Assess severity using validated clinical scoring tools. Identify comorbidities that may complicate the presentation.",
+            "round_question_counts": {
+                "round_1": 6,
+                "round_2": 5,
+                "round_3": 3
+            }
+        },
+        {
+            "id": "FOLLOWUP",
+            "display_name": "Follow-Up Visit",
+            "description": "Follow-up on previous visit, treatment progress, or chronic condition management",
+            "icon": "calendar_check.png",
+            "color": "#9C27B0",
+            "rag_collections": ["clinical_guidelines", "drug_interactions", "chronic_disease_management"],
+            "llm_role": "You are a follow-up care nurse AI assistant. Review the patient's previous visit history and treatment plan. Assess treatment adherence, symptom progression or resolution, medication side effects, and any new concerns. Evaluate whether current management is effective or needs adjustment.",
+            "round_question_counts": {
+                "round_1": 5,
+                "round_2": 4,
+                "round_3": 2
+            }
+        },
+        {
+            "id": "MATERNAL",
+            "display_name": "Maternal / Antenatal Care",
+            "description": "Prenatal, antenatal, postnatal, and reproductive health visits",
+            "icon": "pregnant.png",
+            "color": "#E91E63",
+            "rag_collections": ["maternal_health", "antenatal_guidelines", "obstetric_emergencies", "drug_interactions"],
+            "llm_role": "You are a maternal health nurse AI assistant. Assess gestational age, fetal wellbeing, and maternal health indicators. Screen for pre-eclampsia, gestational diabetes, anemia, and other pregnancy complications. Monitor weight gain, blood pressure trends, and fetal movement patterns. Identify high-risk pregnancies requiring specialist referral.",
+            "round_question_counts": {
+                "round_1": 7,
+                "round_2": 5,
+                "round_3": 3
+            }
+        },
+        {
+            "id": "PEDIATRIC",
+            "display_name": "Pediatric Visit",
+            "description": "Child health visits including growth monitoring, developmental screening, and illness",
+            "icon": "child.png",
+            "color": "#00BCD4",
+            "rag_collections": ["pediatric_guidelines", "growth_charts", "developmental_milestones", "vaccination_schedules"],
+            "llm_role": "You are a pediatric nurse AI assistant. Assess the child using age-appropriate methods. Monitor growth parameters against WHO/CDC charts. Screen for developmental milestones using validated tools. Adjust all assessments for the child's age, weight, and developmental stage. Use caregiver-reported symptoms alongside clinical observation.",
+            "round_question_counts": {
+                "round_1": 6,
+                "round_2": 4,
+                "round_3": 3
+            }
+        },
+        {
+            "id": "MENTAL",
+            "display_name": "Mental Health Screening",
+            "description": "Mental health assessment including depression, anxiety, PTSD, and substance use screening",
+            "icon": "brain.png",
+            "color": "#607D8B",
+            "rag_collections": ["mental_health_guidelines", "phq9_gad7_scales", "suicide_risk_assessment"],
+            "llm_role": "You are a mental health screening nurse AI assistant. Administer validated screening tools (PHQ-9, GAD-7, PC-PTSD-5, AUDIT-C) sensitively. Assess mood, affect, sleep patterns, appetite changes, and functional impairment. Screen for suicidal ideation using Columbia Protocol. Maintain a non-judgmental, empathetic tone throughout the assessment.",
+            "round_question_counts": {
+                "round_1": 6,
+                "round_2": 5,
+                "round_3": 4
+            }
+        }
+    ]
+}

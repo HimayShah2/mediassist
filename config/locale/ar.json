@@ -1,0 +1,9 @@
+{
+  "greeting": "مرحبًا بك في MediAssist",
+  "book_appointment": "حجز موعد",
+  "specialty": "تخصص",
+  "date": "تاريخ",
+  "time": "وقت",
+  "submit": "إرسال",
+  "cancel": "إلغاء"
+}

@@ -1,0 +1,9 @@
+{
+  "greeting": "Welcome to MediAssist",
+  "book_appointment": "Book an Appointment",
+  "specialty": "Specialty",
+  "date": "Date",
+  "time": "Time",
+  "submit": "Submit",
+  "cancel": "Cancel"
+}

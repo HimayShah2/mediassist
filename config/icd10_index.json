@@ -1,0 +1,23 @@
+{
+  "A00": "Cholera",
+  "B20": "Human immunodeficiency virus [HIV] disease",
+  "C00": "Malignant neoplasm of lip",
+  "D50": "Iron deficiency anaemia",
+  "E11": "Type 2 diabetes mellitus",
+  "F32": "Depressive episode",
+  "G40": "Epilepsy",
+  "H10": "Conjunctivitis",
+  "I10": "Essential (primary) hypertension",
+  "J00": "Acute nasopharyngitis [common cold]",
+  "K29": "Gastritis and duodenitis",
+  "L20": "Atopic dermatitis",
+  "M10": "Gout",
+  "N39": "Other disorders of urinary system",
+  "O00": "Ectopic pregnancy",
+  "P00": "Fetus and newborn affected by maternal conditions that may be unrelated to present pregnancy",
+  "Q00": "Anencephaly and similar malformations",
+  "R05": "Cough",
+  "S00": "Superficial injury of head",
+  "T00": "Superficial injuries involving multiple body regions",
+  "Z00": "General examination and investigation of persons without complaint and suspected diagnosis"
+}

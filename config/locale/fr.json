@@ -1,0 +1,9 @@
+{
+  "greeting": "Bienvenue chez MediAssist",
+  "book_appointment": "Prendre un rendez-vous",
+  "specialty": "Spécialité",
+  "date": "Date",
+  "time": "Heure",
+  "submit": "Soumettre",
+  "cancel": "Annuler"
+}

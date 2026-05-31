@@ -1,0 +1,31 @@
+{
+    "facility_name": "MediAssist Development Center",
+    "facility_code": "DEV",
+    "country": "IN",
+    "region": "South Asia",
+    "timezone": "Asia/Kolkata",
+    "currency": "INR",
+    "date_format": "DD/MM/YYYY",
+    "time_format": "24h",
+    "active_specialties": [
+        "general",
+        "pediatrics",
+        "ob_gyn",
+        "emergency"
+    ],
+    "supported_locales": ["en", "fr", "ar"],
+    "default_locale": "en",
+    "max_concurrent_visits": 50,
+    "session_timeout_minutes": 30,
+    "enable_offline_mode": true,
+    "enable_emergency_bypass": true,
+    "vaccination_program_active": true,
+    "maternal_care_active": true,
+    "mental_health_screening_active": true,
+    "lab_integration_enabled": false,
+    "pharmacy_integration_enabled": false,
+    "ehr_export_enabled": false,
+    "data_retention_days": 3650,
+    "audit_log_enabled": true,
+    "disclaimer_required": true
+}

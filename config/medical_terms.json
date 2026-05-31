@@ -1,0 +1,23 @@
+{
+  "dyspnea":        "Difficulty breathing or shortness of breath — ask: 'Does the patient feel they cannot breathe well?'",
+  "palpitations":   "Feeling of abnormal heartbeat — racing, skipping, or pounding heart",
+  "diaphoresis":    "Profuse sweating, often sudden and unexplained — ask: 'Is the patient sweating a lot?'",
+  "hematuria":      "Blood in urine — may appear red, pink, or dark brown",
+  "paresthesia":    "Abnormal skin sensations — tingling, numbness, or 'pins and needles'",
+  "oliguria":       "Passing very little urine — less than 400 mL per day in adults",
+  "hematemesis":    "Vomiting blood — may look like red blood or dark coffee-ground material",
+  "melena":         "Black, tarry stool — usually indicates bleeding in the upper digestive tract",
+  "syncope":        "Sudden, brief loss of consciousness — 'fainting'",
+  "edema":          "Swelling due to fluid buildup — press the swollen area: if a dent remains, it is 'pitting edema'",
+  "cyanosis":       "Bluish discoloration of skin or lips — indicates low blood oxygen",
+  "jaundice":       "Yellowing of skin or whites of eyes — indicates liver or bile duct problem",
+  "prodrome":       "Warning signs appearing before the main symptom — e.g., aura before a migraine",
+  "OPQRST":         "A method to describe pain: Onset, Provocation, Quality, Region, Severity, Time",
+  "PHQ-9":          "A 9-question depression screening tool — scored 0–27; higher = more severe",
+  "GCS":            "Glasgow Coma Scale — measures consciousness: Eye + Verbal + Motor responses, scored 3–15",
+  "APGAR":          "Newborn health score at 1 and 5 minutes after birth — checks Appearance, Pulse, Grimace, Activity, Respiration",
+  "orthopnea":      "Shortness of breath when lying flat — patient needs pillows to sleep",
+  "tachycardia":    "Fast heart rate — above 100 beats per minute in adults",
+  "bradycardia":    "Slow heart rate — below 60 beats per minute in adults",
+  "anuria":         "No urine output — none at all in 24 hours — medical emergency"
+}

@@ -171,21 +171,23 @@ class QuestionnaireUI(QWidget):
         round_answers = {}
         missing = False
         
+        mandatory = {q.question_id: q.is_mandatory for q in self.current_round_data.questions}
         for q_id, widget in self.widgets.items():
             ans = widget.get_answer()
-            if ans == "" or ans == []:
+            if (ans == "" or ans == [] or ans is None) and mandatory.get(q_id, True):
                 missing = True
             round_answers[q_id] = ans
-            
+
         if missing:
-            QMessageBox.warning(self, "Incomplete", "Please answer all questions before submitting.")
+            QMessageBox.warning(self, "Incomplete", "Please answer all mandatory questions before submitting.")
             return
-            
-        # Submit to engine
+
+        # Submit to engine (pass the round's questions so red-flag / scoring resolution works)
         result = self.controller.questionnaire_engine.submit_round_answers(
-            self.current_round_data.round_number, 
+            self.current_round_data.round_number,
             round_answers,
-            scoring_tool_id=self.current_round_data.scoring_tool_id
+            scoring_tool_id=self.current_round_data.scoring_tool_id,
+            questions=self.current_round_data.questions,
         )
         
         if result.get("emergency"):

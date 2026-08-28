@@ -22,6 +22,7 @@ class QuestionnaireEngine:
         self.session_answers  = SessionAnswers()
         self.raw_llm_log      = []    # Stored for physician raw data access
         self.raw_rag_log      = []    # Stored for physician raw data access
+        self._round_questions = {}    # round_number -> [Question], for scoring/flag resolution
 
     async def generate_round(self, round_number: int, visit_type: str,
                               patient_ctx: dict, specialty: str) -> QuestionnaireRound:
@@ -67,14 +68,20 @@ class QuestionnaireEngine:
         )
 
         from config.settings import settings
-        
-        from config.settings import settings
-        grounding_prefix = """
+
+        if rag_text.strip():
+            grounding_prefix = """
 CRITICAL GROUNDING RULES:
-1. You MUST answer ONLY based on the provided RAG context below.
-2. If the context is from a website (labeled SOURCE [WEB: ...]), you MUST explicitly quote the site name in your reasoning (e.g., 'According to WebMD...' or 'As per WHO...').
-3. Do NOT use your own internal knowledge if it contradicts the context. 
-4. Cite sources verbatim in the 'rag_context_used' array.
+1. Prefer the provided RAG context below over your own recollection; if they conflict, follow the context.
+2. If a source is a website (SOURCE [WEB: ...]), name the site in your reasoning (e.g. 'As per WHO...').
+3. Cite the sources you used verbatim in the 'rag_context_used' array. Never cite a source not shown below.
+"""
+        else:
+            grounding_prefix = """
+GROUNDING RULES:
+1. No knowledge-base context was retrieved for this case.
+2. Base your questions on well-established clinical guidelines from your training.
+3. Leave 'rag_context_used' as an empty array. Do NOT fabricate citations.
 """
         start = time.time()
         for attempt in range(self.MAX_RETRIES):
@@ -92,24 +99,34 @@ CRITICAL GROUNDING RULES:
                 self.raw_llm_log.append({"round": round_number, "model": "local-model",
                                           "duration_ms": duration})
                 logger.info(f"Round {round_number} generated: {len(result.questions)} questions in {duration}ms")
+                if not hasattr(self, "_round_questions"):
+                    self._round_questions = {}
+                self._round_questions[round_number] = result.questions
                 return result
             except Exception as e:
                 logger.warning(f"Round {round_number} generation attempt {attempt+1} failed: {e}")
                 if attempt == self.MAX_RETRIES - 1:
                     raise RuntimeError(f"Failed to generate round {round_number} after {self.MAX_RETRIES} attempts")
 
-    def submit_round_answers(self, round_number: int, answers: dict, scoring_tool_id: str = None):
-        """Store answers, calculate clinical scores if applicable, and check for red flags."""
+    def submit_round_answers(self, round_number: int, answers: dict, scoring_tool_id: str = None,
+                             questions: list = None):
+        """Store answers, calculate clinical scores if applicable, and check for red flags.
+
+        `questions` is the list of Question objects for this round (from the generated
+        QuestionnaireRound). It lets us resolve selected option metadata for red-flag
+        detection and standardized scoring.
+        """
         setattr(self.session_answers, f"round_{round_number}", answers)
-        
+
+        if questions is None:
+            questions = list(getattr(self, "_round_questions", {}).get(round_number, []))
+
         # Clinical Scoring Integration
         if scoring_tool_id:
             from scoring import clinical_tools
             try:
-                # Convert answers dict to ordered list of values for the specific tool
-                # This assumes the LLM correctly mapped the MCQ options to integer values
-                score_values = [int(v) for v in answers.values() if str(v).isdigit()]
-                
+                score_values = self._resolve_score_values(answers, questions)
+
                 calculation = None
                 if scoring_tool_id == "phq9":
                     calculation = clinical_tools.calculate_phq9(score_values)
@@ -130,16 +147,35 @@ CRITICAL GROUNDING RULES:
             except Exception as e:
                 logger.warning(f"Failed to calculate clinical score {scoring_tool_id}: {e}")
 
-        flags = self.flag_detector.check_answers(answers, round_number)
+        flags = self.flag_detector.check_answers(answers, round_number, questions=questions)
         if flags:
             self.session_answers.flags_raised.extend(flags)
-            return {"emergency": True, "flags": flags}
-        return {"emergency": False, "flags": []}
+        # Only true RED flags escalate to an emergency stop; AMBER is recorded but not blocking.
+        emergency = any("RED FLAG" in f.upper() for f in flags)
+        return {"emergency": emergency, "flags": flags}
 
-        """Store answers and check every answer for red flags."""
-        setattr(self.session_answers, f"round_{round_number}", answers)
-        flags = self.flag_detector.check_answers(answers, round_number)
-        if flags:
-            self.session_answers.flags_raised.extend(flags)
-            return {"emergency": True, "flags": flags}
-        return {"emergency": False, "flags": []}
+    @staticmethod
+    def _resolve_score_values(answers: dict, questions: list) -> list:
+        """Map selected option ids -> integer values (option.value, else trailing int in label,
+        else the raw answer if it is already numeric). Preserves question order."""
+        q_by_id = {getattr(q, "question_id", None): q for q in (questions or [])}
+        ordered_ids = [getattr(q, "question_id", None) for q in (questions or [])] or list(answers.keys())
+        values = []
+        for q_id in ordered_ids:
+            if q_id not in answers:
+                continue
+            ans = answers[q_id]
+            q = q_by_id.get(q_id)
+            picked = ans[0] if isinstance(ans, list) and ans else ans
+            if q is not None and getattr(q, "options", None):
+                opt = next((o for o in q.options if str(o.id) == str(picked) or o.label == picked), None)
+                if opt is not None:
+                    if opt.value is not None:
+                        values.append(int(opt.value)); continue
+                    import re
+                    m = re.search(r"(\d+)", opt.label)
+                    if m:
+                        values.append(int(m.group(1))); continue
+            if str(picked).lstrip("-").isdigit():
+                values.append(int(picked))
+        return values

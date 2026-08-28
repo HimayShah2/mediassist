@@ -8,7 +8,7 @@ class OPENTEXT(QWidget):
         self.layout = QVBoxLayout(self)
         self.layout.setContentsMargins(0, 0, 0, 0)
         
-        self.label = QLabel(self.question.question_text)
+        self.label = QLabel(getattr(self.question, "text", None) or getattr(self.question, "question_text", ""))
         self.label.setWordWrap(True)
         self.label.setStyleSheet("font-weight: bold; font-size: 16px; margin-bottom: 5px;")
         

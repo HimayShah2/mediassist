@@ -14,6 +14,7 @@ class OptionType(str, Enum):
 class MCQOption(BaseModel):
     id:        str
     label:     str
+    value:     Optional[int] = None   # Numeric score for scale / standardized-tool questions (e.g. PHQ-9 0-3)
     is_red_flag:   bool = False   # If selected -> RED clinical flag
     is_amber_flag: bool = False   # If selected -> AMBER flag
     differential_indicator: Optional[str] = None  # Which differential this supports

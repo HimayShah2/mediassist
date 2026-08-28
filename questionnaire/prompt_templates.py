@@ -12,10 +12,17 @@ class PromptTemplates:
         if round_number == 1 and (not history or patient_ctx.get('no_history_toggle')):
             history_instruction = "\n- Since NO patient history is available, you MUST ask foundational medical history questions (e.g., major past illnesses, ongoing medications, allergies) in this first round alongside the chief complaint."
 
-        # Citation requirement for rounds 2-4
+        # Citation requirement for rounds 2-4 (only when RAG context is actually present)
         citation_instruction = ""
         if round_number >= 2:
-            citation_instruction = "\n- You MUST cite exactly 3 prominent medical sources from the provided RAG context to justify your question choices. Include these source titles in the 'rag_context_used' array in your JSON output."
+            if rag_context and rag_context.strip():
+                citation_instruction = ("\n- Cite up to 3 sources FROM THE PROVIDED RAG CONTEXT that justify your "
+                                        "question choices, and list their titles in 'rag_context_used'. "
+                                        "Do NOT invent sources that are not in the context.")
+            else:
+                citation_instruction = ("\n- No RAG context was retrieved. Base questions on well-established "
+                                        "clinical guidelines from your training and leave 'rag_context_used' empty. "
+                                        "Do NOT fabricate citations.")
 
         base_prompt = f"""
 You are an expert clinical intake assistant in a humanitarian setting.
@@ -30,15 +37,20 @@ CONTEXT:
 - Previous Answers: {session_answers}
 
 INSTRUCTIONS:
-- Generate 6-8 MCQ questions for Round {round_number}.
+- Generate 6-8 questions for Round {round_number}.
 - Round 1: Focus on Triage & Chief Complaint.{history_instruction}
 - Round 2: Focus on Symptom Characterization (OPQRST).{citation_instruction}
 - Round 3: Focus on History, Meds, Allergies, Risk Factors.{citation_instruction}
 - Round 4: Focus on Differential Refinement.{citation_instruction}
 - Use simple language for patients, but maintain clinical rigor.
 - Provide a 'nurse_explanation' for complex terms.
-- Mark critical findings as 'is_red_flag' or 'is_amber_flag'.
-- If appropriate for the specialty (e.g., Psychiatry, Emergency, Pediatrics), you can choose to conduct a standardized assessment by setting 'scoring_tool_id' to one of: ["phq9", "gcs", "apgar", "sofa"]. If you do this, ensure the questions you generate exactly match the standard scale parameters.
+- EVERY 'radio' and 'checkbox' question MUST include an 'options' array; each option needs a
+  short 'id' (e.g. "a","b") and a patient-friendly 'label'.
+- On any option that indicates a clinical emergency, set "is_red_flag": true. On a concerning
+  but non-emergency finding, set "is_amber_flag": true.
+- If you choose a standardized assessment, set 'scoring_tool_id' to one of
+  ["phq9","gcs","apgar","sofa"], make the questions match that scale exactly, and set the
+  integer "value" on every option (e.g. PHQ-9 options carry value 0,1,2,3).
 
 OUTPUT FORMAT:
 Respond ONLY with a JSON object matching the QuestionnaireRound schema.

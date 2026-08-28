@@ -30,20 +30,31 @@ class AuditLogUI(QWidget):
 
     def _load_logs(self):
         # Queries the audit_log table in SQLite
+        if not self.controller or not hasattr(self.controller, "get_db_session"):
+            self.table.setRowCount(1)
+            self.table.setItem(0, 0, QTableWidgetItem("Audit log unavailable (no database session)."))
+            return
+
         session = self.controller.get_db_session()
         try:
-            # Blueprint §12.3: Retrieve immutable logs
-            # If the table doesn't exist yet (first run), we handle gracefully
-            res = session.execute(text("SELECT timestamp, user_id, action, case_number, details FROM audit_log ORDER BY timestamp DESC LIMIT 100"))
+            # Column names match models.db_models.AuditLog
+            res = session.execute(text(
+                "SELECT timestamp, user, action, entity_id, details "
+                "FROM audit_log ORDER BY timestamp DESC LIMIT 100"
+            ))
             logs = res.fetchall()
-            
+
+            if not logs:
+                self.table.setRowCount(1)
+                self.table.setItem(0, 0, QTableWidgetItem("No logs available yet."))
+                return
+
             self.table.setRowCount(len(logs))
             for i, log in enumerate(logs):
                 for j in range(5):
                     self.table.setItem(i, j, QTableWidgetItem(str(log[j])))
-        except Exception:
-            # Fallback if no logs yet
+        except Exception as e:
             self.table.setRowCount(1)
-            self.table.setItem(0, 0, QTableWidgetItem("No logs available yet."))
+            self.table.setItem(0, 0, QTableWidgetItem(f"Could not load logs: {e}"))
         finally:
             session.close()

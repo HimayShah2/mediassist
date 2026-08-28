@@ -195,3 +195,9 @@ tests/*.json
 tests/*.csv
 test_reports/
 document-echo/
+
+scripts/payload.zip
+scripts/nsis_portable/
+scripts/nsis/
+*.exe
+!Launch_MediAssist.bat

@@ -5,7 +5,8 @@ langchain-community==0.3.7
 langchain-openai==0.2.5
 instructor==1.5.2
 chromadb==0.5.18
-sentence-transformers==3.2.0
+flashrank==0.2.10
+onnxruntime==1.15.1
 huggingface-hub==0.25.1
 pymupdf==1.24.11
 pdfplumber==0.11.4

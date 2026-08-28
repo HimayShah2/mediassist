@@ -1,46 +1,30 @@
-from PySide6.QtWidgets import QFrame, QVBoxLayout, QLabel, QSlider, QHBoxLayout
-from PySide6.QtCore import Qt, Signal
-from models.questionnaire import Question
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QSlider, QLabel, QHBoxLayout
+from PySide6.QtCore import Qt
 
-class SCALESLIDER(QFrame):
-    """
-    Blueprint-compliant Scale/Slider MCQ Widget.
-    Section 9.1 & 9.2
-    """
-    answer_changed = Signal(int)
-
-    def __init__(self, question: Question, parent=None):
+class ScaleSlider(QWidget):
+    def __init__(self, question_text: str, min_val: int = 1, max_val: int = 10, parent=None):
         super().__init__(parent)
-        self.setProperty("role", "option-container")
-        self.layout = QVBoxLayout(self)
-
-        self.lbl_question = QLabel(question.text)
-        self.lbl_question.setProperty("role", "question")
-        self.layout.addWidget(self.lbl_question)
-
+        layout = QVBoxLayout(self)
+        
+        layout.addWidget(QLabel(question_text))
+        
         self.slider = QSlider(Qt.Horizontal)
-        self.slider.setMinimum(0)
-        self.slider.setMaximum(10)
+        self.slider.setMinimum(min_val)
+        self.slider.setMaximum(max_val)
+        self.slider.setValue((min_val + max_val) // 2)
         self.slider.setTickPosition(QSlider.TicksBelow)
         self.slider.setTickInterval(1)
-        self.slider.setMinimumHeight(44)
-
-        self.val_label = QLabel("0")
-        self.val_label.setStyleSheet("font-weight: bold; font-size: 18px;")
+        
+        self.val_label = QLabel(str(self.slider.value()))
+        self.slider.valueChanged.connect(lambda v: self.val_label.setText(str(v)))
         
         h_layout = QHBoxLayout()
-        h_layout.addWidget(QLabel("None (0)"))
+        h_layout.addWidget(QLabel(str(min_val)))
         h_layout.addWidget(self.slider)
-        h_layout.addWidget(QLabel("Severe (10)"))
+        h_layout.addWidget(QLabel(str(max_val)))
         h_layout.addWidget(self.val_label)
         
-        self.layout.addLayout(h_layout)
+        layout.addLayout(h_layout)
         
-        self.slider.valueChanged.connect(self._on_changed)
-
-    def _on_changed(self, value):
-        self.val_label.setText(str(value))
-        self.answer_changed.emit(value)
-
-    def get_answer(self) -> int:
+    def get_value(self) -> int:
         return self.slider.value()

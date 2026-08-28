@@ -1,0 +1,107 @@
+{
+  "General Medicine": [
+    {"id": "weight_change", "label": "Unintended weight loss or gain?", "type": "boolean"},
+    {"id": "fatigue", "label": "Experiencing unusual fatigue or weakness?", "type": "boolean"},
+    {"id": "sleep_issues", "label": "Difficulty sleeping?", "type": "boolean"}
+  ],
+  "Pediatrics": [
+    {"id": "feeding", "label": "Feeding/Dietary issues?", "type": "boolean"},
+    {"id": "school_perf", "label": "School performance concerns?", "type": "boolean"},
+    {"id": "behavior", "label": "Behavioral concerns?", "type": "boolean"}
+  ],
+  "Obstetrics": [
+    {"id": "gravida", "label": "Gravida (Total Pregnancies)", "type": "number"},
+    {"id": "para", "label": "Para (Live Births)", "type": "number"},
+    {"id": "lmp", "label": "Last Menstrual Period (LMP)", "type": "text"}
+  ],
+  "Gynecology": [
+    {"id": "menstrual_cycle", "label": "Are menstrual cycles regular?", "type": "boolean"},
+    {"id": "pelvic_pain", "label": "History of pelvic pain?", "type": "boolean"},
+    {"id": "contraception", "label": "Current contraception method", "type": "text"}
+  ],
+  "Cardiology": [
+    {"id": "chest_pain", "label": "History of chest pain or angina?", "type": "boolean"},
+    {"id": "palpitations", "label": "Experiencing palpitations?", "type": "boolean"},
+    {"id": "smoking", "label": "Smoking History (Pack-years)", "type": "number"}
+  ],
+  "Dermatology": [
+    {"id": "rash_duration", "label": "Duration of rash/lesion (days)", "type": "number"},
+    {"id": "itching", "label": "Is the lesion itchy (pruritic)?", "type": "boolean"},
+    {"id": "sun_exposure", "label": "Frequent sun exposure without protection?", "type": "boolean"}
+  ],
+  "Endocrinology": [
+    {"id": "polyuria", "label": "Increased urination (polyuria)?", "type": "boolean"},
+    {"id": "polydipsia", "label": "Increased thirst (polydipsia)?", "type": "boolean"},
+    {"id": "heat_cold_intol", "label": "Heat or cold intolerance?", "type": "boolean"}
+  ],
+  "Gastroenterology": [
+    {"id": "nausea", "label": "Frequent nausea or indigestion?", "type": "boolean"},
+    {"id": "bowel_changes", "label": "Recent changes in bowel habits?", "type": "boolean"},
+    {"id": "blood_stool", "label": "Blood in stool (hematochezia/melena)?", "type": "boolean"}
+  ],
+  "Hematology": [
+    {"id": "bruising", "label": "Easy bruising or bleeding?", "type": "boolean"},
+    {"id": "anemia", "label": "History of anemia?", "type": "boolean"},
+    {"id": "lymph_nodes", "label": "Swollen lymph nodes?", "type": "boolean"}
+  ],
+  "Infectious Disease": [
+    {"id": "recent_travel", "label": "Recent international travel?", "type": "boolean"},
+    {"id": "animal_bites", "label": "Recent animal or tick bites?", "type": "boolean"},
+    {"id": "fever_duration", "label": "Duration of fever (days)", "type": "number"}
+  ],
+  "Nephrology": [
+    {"id": "hematuria", "label": "Blood in urine (hematuria)?", "type": "boolean"},
+    {"id": "flank_pain", "label": "Flank pain?", "type": "boolean"},
+    {"id": "swelling", "label": "Swelling in legs or face (edema)?", "type": "boolean"}
+  ],
+  "Neurology": [
+    {"id": "headaches_chronic", "label": "Chronic or severe headaches?", "type": "boolean"},
+    {"id": "seizures", "label": "History of seizures?", "type": "boolean"},
+    {"id": "numbness", "label": "Numbness or tingling?", "type": "boolean"}
+  ],
+  "Oncology": [
+    {"id": "fam_cancer", "label": "Family history of cancer?", "type": "boolean"},
+    {"id": "weight_loss", "label": "Significant unexplained weight loss?", "type": "boolean"},
+    {"id": "night_sweats", "label": "Frequent night sweats?", "type": "boolean"}
+  ],
+  "Ophthalmology": [
+    {"id": "vision_loss", "label": "Sudden loss of vision?", "type": "boolean"},
+    {"id": "eye_pain", "label": "Pain in the eyes?", "type": "boolean"},
+    {"id": "floaters", "label": "New floaters or flashes?", "type": "boolean"}
+  ],
+  "Orthopedics": [
+    {"id": "joint_pain", "label": "Joint pain or swelling?", "type": "boolean"},
+    {"id": "trauma", "label": "Recent physical trauma or fall?", "type": "boolean"},
+    {"id": "mobility", "label": "Difficulty bearing weight?", "type": "boolean"}
+  ],
+  "Otolaryngology (ENT)": [
+    {"id": "hearing_loss", "label": "Hearing loss or tinnitus?", "type": "boolean"},
+    {"id": "dysphagia", "label": "Difficulty swallowing (dysphagia)?", "type": "boolean"},
+    {"id": "sinus", "label": "Chronic sinus pain or congestion?", "type": "boolean"}
+  ],
+  "Psychiatry": [
+    {"id": "phq9", "label": "PHQ-9 Depression Score (0-27)", "type": "number"},
+    {"id": "substance", "label": "Current substance or alcohol abuse?", "type": "boolean"},
+    {"id": "suicide_risk", "label": "History of self-harm or suicide attempts?", "type": "boolean"}
+  ],
+  "Pulmonology": [
+    {"id": "sob", "label": "Shortness of breath (dyspnea)?", "type": "boolean"},
+    {"id": "chronic_cough", "label": "Chronic cough?", "type": "boolean"},
+    {"id": "wheezing", "label": "Wheezing or asthma?", "type": "boolean"}
+  ],
+  "Rheumatology": [
+    {"id": "morning_stiffness", "label": "Morning stiffness lasting >1 hour?", "type": "boolean"},
+    {"id": "multiple_joints", "label": "Pain in multiple joints?", "type": "boolean"},
+    {"id": "rash_sun", "label": "Sun-sensitive rash?", "type": "boolean"}
+  ],
+  "Urology": [
+    {"id": "dysuria", "label": "Painful urination (dysuria)?", "type": "boolean"},
+    {"id": "frequency", "label": "Increased urinary frequency?", "type": "boolean"},
+    {"id": "incontinence", "label": "Urinary incontinence?", "type": "boolean"}
+  ],
+  "Emergency Medicine": [
+    {"id": "trauma_major", "label": "Major trauma?", "type": "boolean"},
+    {"id": "loc", "label": "Loss of consciousness?", "type": "boolean"},
+    {"id": "pain_scale", "label": "Pain Scale (0-10)", "type": "number"}
+  ]
+}

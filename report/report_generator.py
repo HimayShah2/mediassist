@@ -1,11 +1,9 @@
 import asyncio
-import instructor
-from openai import AsyncOpenAI
 from loguru import logger
 
 from models.report_output import PhysicianBrief
 from models.questionnaire import SessionAnswers
-from nim.nim_key_manager import NIMKeyManager, ModelRole
+from llm.server_client import ServerLLMClient
 from rag.document_manager import DocumentManager
 from questionnaire.prompt_templates import PromptTemplates
 
@@ -14,12 +12,12 @@ from .consensus_validator import ConsensusValidator
 from .confidence_scorer import ConfidenceScorer
 
 class ReportGenerator:
-    def __init__(self, key_manager: NIMKeyManager, doc_manager: DocumentManager):
-        self.key_manager = key_manager
+    def __init__(self, llm_client: ServerLLMClient, doc_manager: DocumentManager):
+        self.llm_client = llm_client
         self.doc_manager = doc_manager
         self.prompts     = PromptTemplates()
-        self.icd_mapper  = ICDMapper(key_manager)
-        self.validator   = ConsensusValidator(key_manager)
+        self.icd_mapper  = ICDMapper(llm_client)
+        self.validator   = ConsensusValidator(llm_client)
         self.scorer      = ConfidenceScorer()
 
     async def generate(self, case_number: str, session_answers: SessionAnswers,
@@ -28,17 +26,11 @@ class ReportGenerator:
 
         # Retrieve final RAG context for report generation
         complaint_query = patient_ctx.get("chief_complaint_summary", "General clinical summary")
-        final_chunks    = self.doc_manager.retrieve(complaint_query,
+        # Ensure we await the retrieval
+        final_chunks    = await self.doc_manager.retrieve(complaint_query,
                            ["core_medicine", "who_guidelines"], n_results=15)
-        rag_text        = "\n\n".join([f"[{c['metadata']['source_file']}] {c['text']}" for c in final_chunks[:5]])
+        rag_text        = "\n\n".join([f"[{c.get('metadata', {}).get('source_file', 'unknown')}] {c['text']}" for c in final_chunks[:5]])
 
-        # Primary generation: ROLE_MEDICAL
-        key_m = self.key_manager.get_key_for_role(ModelRole.MEDICAL)
-        client_m = instructor.from_openai(AsyncOpenAI(
-            base_url="https://integrate.api.nvidia.com/v1",
-            api_key=key_m.key_value, timeout=60.0, max_retries=0
-        ))
-        
         medical_prompt = self.prompts.get_brief_prompt(
             case_number=case_number,
             session_answers=session_answers.dict(),
@@ -48,8 +40,7 @@ class ReportGenerator:
             specialty=specialty
         )
 
-        primary_brief: PhysicianBrief = await client_m.chat.completions.create(
-            model=self.key_manager.get_model_for_role(ModelRole.MEDICAL),
+        primary_brief: PhysicianBrief = await self.llm_client.generate_structured(
             response_model=PhysicianBrief,
             messages=[{"role": "user", "content": medical_prompt}],
             temperature=0.1, max_tokens=8192

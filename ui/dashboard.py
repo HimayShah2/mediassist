@@ -1,6 +1,11 @@
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QLabel, QHBoxLayout, 
                                QFrame, QGridLayout, QPushButton, QTableWidget, QTableWidgetItem)
 from PySide6.QtCore import Qt
+import datetime
+from sqlalchemy import desc
+
+from database.connection import get_session
+from models.db_models import Patient, Encounter
 
 class DashboardView(QWidget):
     def __init__(self):
@@ -20,9 +25,9 @@ class DashboardView(QWidget):
         # Stats Cards
         self.stats_layout = QHBoxLayout()
         
-        self.card_active = self._create_stat_card("Active Sessions", "3", "#00A896")
-        self.card_completed = self._create_stat_card("Completed Today", "12", "#0F2D52")
-        self.card_alerts = self._create_stat_card("Emergency Alerts", "0", "#D62839")
+        self.card_active, self.lbl_active_val = self._create_stat_card("Total Patients", "0", "#00A896")
+        self.card_completed, self.lbl_completed_val = self._create_stat_card("Encounters Today", "0", "#0F2D52")
+        self.card_alerts, self.lbl_alerts_val = self._create_stat_card("Emergency Alerts", "0", "#D62839")
         
         self.stats_layout.addWidget(self.card_active)
         self.stats_layout.addWidget(self.card_completed)
@@ -34,16 +39,12 @@ class DashboardView(QWidget):
         self.table_label.setStyleSheet("font-size: 18px; font-weight: bold; margin-top: 20px;")
         self.layout.addWidget(self.table_label)
 
-        self.table = QTableWidget(5, 4)
+        self.table = QTableWidget(0, 4)
         self.table.setHorizontalHeaderLabels(["Case Number", "Name", "Visit Type", "Status"])
         self.table.horizontalHeader().setStretchLastSection(True)
-        
-        # Mock data
-        self._add_table_row(0, "MC-2025-0042", "John Doe", "Specific Complaint", "Awaiting Doctor")
-        self._add_table_row(1, "MC-2025-0043", "Jane Smith", "General Checkup", "In Progress")
-        self._add_table_row(2, "MC-2025-0044", "Baby Alan", "Pediatric Well-Visit", "Completed")
-        
         self.layout.addWidget(self.table)
+        
+        self.refresh_data()
 
     def _create_stat_card(self, title, value, color):
         card = QFrame()
@@ -58,10 +59,32 @@ class DashboardView(QWidget):
         
         card_layout.addWidget(lbl_title)
         card_layout.addWidget(lbl_value)
-        return card
+        return card, lbl_value
 
-    def _add_table_row(self, row, case, name, vtype, status):
-        self.table.setItem(row, 0, QTableWidgetItem(case))
-        self.table.setItem(row, 1, QTableWidgetItem(name))
-        self.table.setItem(row, 2, QTableWidgetItem(vtype))
-        self.table.setItem(row, 3, QTableWidgetItem(status))
+    def refresh_data(self):
+        try:
+            with get_session() as db:
+                total_patients = db.query(Patient).count()
+                
+                today_start = datetime.datetime.combine(datetime.date.today(), datetime.time.min)
+                encounters_today = db.query(Encounter).filter(Encounter.created_at >= today_start).count()
+                
+                self.lbl_active_val.setText(str(total_patients))
+                self.lbl_completed_val.setText(str(encounters_today))
+                self.lbl_alerts_val.setText("0")
+
+                recent_encounters = db.query(Encounter).order_by(desc(Encounter.created_at)).limit(10).all()
+                self.table.setRowCount(len(recent_encounters))
+                
+                for row, enc in enumerate(recent_encounters):
+                    pat = enc.patient
+                    name = f"{pat.first_name} {pat.last_name}" if pat else "Unknown"
+                    vtype = enc.encounter_type or "General Checkup"
+                    status = "Completed" if enc.ai_summary else "In Progress"
+                    
+                    self.table.setItem(row, 0, QTableWidgetItem(enc.case_number))
+                    self.table.setItem(row, 1, QTableWidgetItem(name))
+                    self.table.setItem(row, 2, QTableWidgetItem(vtype))
+                    self.table.setItem(row, 3, QTableWidgetItem(status))
+        except Exception as e:
+            print(f"Dashboard refresh error: {e}")

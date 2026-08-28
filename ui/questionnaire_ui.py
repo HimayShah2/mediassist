@@ -3,16 +3,17 @@ import os
 import re
 from loguru import logger
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QLabel, QPushButton, 
-                               QScrollArea, QToolTip, QFrame, QMessageBox)
+                               QScrollArea, QToolTip, QFrame, QMessageBox, QTextEdit)
 from PySide6.QtCore import Qt, Slot, Signal
 from PySide6.QtGui import QCursor
 
 from models.questionnaire import QuestionnaireRound, OptionType, Question
 from ui.workers.questionnaire_worker import QuestionnaireWorker
 from ui.question_components.mcq_radio import MCQRADIO
-from ui.question_components.mcq_checkbox import MCQCHECKBOX
-from ui.question_components.scale_slider import SCALESLIDER
+from ui.question_components.mcq_checkbox import MCQCheckbox as MCQCHECKBOX
+from ui.question_components.scale_slider import ScaleSlider as SCALESLIDER
 from ui.question_components.date_duration import DATEDURATION
+from ui.question_components.open_text import OPENTEXT
 
 class QuestionnaireUI(QWidget):
     """
@@ -48,6 +49,57 @@ class QuestionnaireUI(QWidget):
         self.btn_submit.setEnabled(False)
         self.layout.addWidget(self.btn_submit)
 
+        # Other Issue button
+        self.btn_other_issue = QPushButton("Report Other Issue")
+        self.btn_other_issue.setStyleSheet("background-color: #f59e0b; color: white;")
+        self.btn_other_issue.clicked.connect(self._add_other_issue)
+        self.layout.addWidget(self.btn_other_issue)
+
+        # Add Enter shortcut to submit round
+        from PySide6.QtGui import QShortcut, QKeySequence
+        self.submit_shortcut = QShortcut(QKeySequence("Return"), self)
+        self.submit_shortcut.activated.connect(self._on_enter_pressed)
+        self.submit_shortcut_enter = QShortcut(QKeySequence("Enter"), self)
+        self.submit_shortcut_enter.activated.connect(self._on_enter_pressed)
+
+    def _add_other_issue(self):
+        """Adds a generic text box for any unlisted symptoms or issues."""
+        from models.questionnaire import Question, OptionType
+        q = Question(
+            question_id=f"other_issue_{len(self.widgets)}",
+            round=1,
+            text="Please describe the other issue/symptom in detail:",
+            type=OptionType.TEXT,
+            is_mandatory=False
+        )
+        widget = self._create_widget(q)
+        if widget:
+            self.scroll_layout.insertWidget(self.scroll_layout.count() - 1, widget)
+            self.widgets[q.question_id] = widget
+
+    def _on_enter_pressed(self):
+        """Trigger submit if all fields are answered, else advance focus."""
+        if not self.btn_submit.isEnabled():
+            return
+            
+        # Do not override Enter if focused widget is a multi-line text edit
+        focus_widget = self.focusWidget()
+        if focus_widget and isinstance(focus_widget, QTextEdit):
+            return
+
+            
+        all_answered = True
+        for q_id, widget in self.widgets.items():
+            ans = widget.get_answer()
+            if ans == "" or ans == []:
+                all_answered = False
+                break
+                
+        if all_answered:
+            self.btn_submit.click()
+        else:
+            # Advance focus to the next input field
+            self.focusNextChild()
     def start_session(self, visit_type: str, patient_ctx: dict, specialty: str):
         """Starts the first round of the questionnaire."""
         self.patient_ctx = patient_ctx
@@ -108,6 +160,8 @@ class QuestionnaireUI(QWidget):
             return SCALESLIDER(question)
         elif question.type == OptionType.DATE or question.type == OptionType.DURATION:
             return DATEDURATION(question)
+        elif question.type == OptionType.TEXT:
+            return OPENTEXT(question)
         else:
             logger.warning(f"Unsupported question type: {question.type}")
             return None
@@ -115,9 +169,17 @@ class QuestionnaireUI(QWidget):
     def submit_round(self):
         """Collects answers and submits to engine."""
         round_answers = {}
+        missing = False
+        
         for q_id, widget in self.widgets.items():
             ans = widget.get_answer()
+            if ans == "" or ans == []:
+                missing = True
             round_answers[q_id] = ans
+            
+        if missing:
+            QMessageBox.warning(self, "Incomplete", "Please answer all questions before submitting.")
+            return
             
         # Submit to engine
         result = self.controller.questionnaire_engine.submit_round_answers(
@@ -138,7 +200,7 @@ class QuestionnaireUI(QWidget):
             self.btn_submit.setText("Intake Complete - Processing Vitals")
             self.btn_submit.setEnabled(False)
             # Signal to main window to switch to Vitals form
-            # self.session_complete.emit()
+            self.session_complete.emit()
 
     def on_error(self, error_msg: str):
         QMessageBox.critical(self, "Generation Error", f"Failed to generate round: {error_msg}")

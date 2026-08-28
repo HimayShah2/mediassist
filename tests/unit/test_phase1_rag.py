@@ -6,12 +6,12 @@ from unittest.mock import MagicMock, patch
 from reportlab.pdfgen import canvas
 import chromadb
 
-from nim.nim_key_manager import NIMKeyManager, ModelRole
+from llm.server_client import ServerLLMClient
 from rag.document_manager import DocumentManager
 
 @pytest.fixture
 def mock_keys():
-    manager = MagicMock(spec=NIMKeyManager)
+    manager = MagicMock(spec=ServerLLMClient)
     
     # Mock get_key_for_role
     key_mock = MagicMock()
@@ -20,8 +20,8 @@ def mock_keys():
     
     # Mock get_model_for_role
     manager.get_model_for_role.side_effect = lambda role: {
-        ModelRole.EMBED: "nvidia/nv-embed-v1",
-        ModelRole.RERANK: "nvidia/nv-rerank-qa-mistral-4b:1"
+        str.EMBED: "nvidia/nv-embed-v1",
+        str.RERANK: "nvidia/nv-rerank-qa-mistral-4b:1"
     }.get(role, "unknown")
     
     return manager
@@ -66,7 +66,7 @@ def test_rag_pipeline(mock_post, MockEmbeddings, temp_workspace, mock_keys):
     mock_post.return_value = mock_response
 
     # 2. Initialize DocumentManager
-    doc_mgr = DocumentManager(key_manager=mock_keys, db_path=temp_workspace["db_path"])
+    doc_mgr = DocumentManager(llm_client=mock_keys, db_path=temp_workspace["db_path"])
     # Modify min similarity so our dummy zero distance (perfect match) doesn't get filtered out.
     # Default distance from chromadb for zero vectors is 0, so similarity = 1.0. 
     # But wait, we mocked embed_documents to return vectors. ChromaDB will calculate distance.

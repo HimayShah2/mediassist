@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional
 from datetime import datetime
 
@@ -20,7 +20,7 @@ class PhysicianBrief(BaseModel):
     differentials: List[DifferentialDiagnosis]
     examination_plan: List[str]
     recommended_investigations: List[str]
-    rag_sources: List[str]
-    confidence_score: float
+    rag_sources: List[str] = Field(default_factory=list)
+    confidence_score: float = 0.0          # computed by ConfidenceScorer post-generation
     is_emergency: bool = False
-    generated_at: datetime = datetime.now()
+    generated_at: datetime = Field(default_factory=datetime.now)

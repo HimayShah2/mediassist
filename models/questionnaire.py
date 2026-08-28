@@ -34,10 +34,12 @@ class QuestionnaireRound(BaseModel):
     visit_type:         str
     specialty:          str
     questions:          List[Question]
-    rag_context_used:   List[str]   # Source document titles cited
-    rag_chunk_ids:      List[str]   # Raw chunk IDs for physician raw data access
-    model_used:         str
-    generation_time_ms: int
+    # The following are populated by QuestionnaireEngine after generation,
+    # so they must be optional in the schema the LLM fills in.
+    rag_context_used:   List[str] = Field(default_factory=list)   # Source document titles cited
+    rag_chunk_ids:      List[str] = Field(default_factory=list)   # Raw chunk IDs for physician raw data access
+    model_used:         str = "local-model"
+    generation_time_ms: int = 0
     working_differentials: Optional[List[str]] = None  # Rounds 3-4 only
     scoring_tool_id: Optional[str] = None  # e.g., "phq9", "gcs", "apgar"
     

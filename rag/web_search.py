@@ -9,7 +9,7 @@ class DuckDuckGoSearcher:
     No API key required.
     Supports restricting results to specific trusted domains.
     """
-    SEARCH_URL = "https://html.duckduckgo.com/html/"
+    SEARCH_URL = "https://lite.duckduckgo.com/lite/"
 
     async def search(self, query: str, trusted_sites: List[str] = None, max_results: int = 5) -> list[dict]:
         """
@@ -23,28 +23,35 @@ class DuckDuckGoSearcher:
         logger.info(f"Performing restricted snippet search: {full_query}")
         
         try:
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(follow_redirects=True) as client:
                 response = await client.post(
                     self.SEARCH_URL,
                     data={"q": full_query},
-                    headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"},
-                    timeout=10.0
+                    headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36"},
+                    timeout=15.0
                 )
                 response.raise_for_status()
-                
+
                 body = response.text
                 results = []
-                
-                # Extract snippets, titles, and display URLs
-                snippets = re.findall(r'<a class="result__snippet".*?>(.*?)</a>', body, re.DOTALL)
-                titles = re.findall(r'<a class="result__a".*?>(.*?)</a>', body, re.DOTALL)
-                urls = re.findall(r'<span class="result__url">(.*?)</span>', body, re.DOTALL)
-                
-                for i in range(min(len(snippets), max_results)):
-                    clean_snippet = re.sub(r'<.*?>', '', snippets[i]).strip()
-                    clean_title = re.sub(r'<.*?>', '', titles[i]).strip()
-                    display_url = re.sub(r'<.*?>', '', urls[i]).strip() if i < len(urls) else "Trusted Web Source"
-                    
+
+                # The lite endpoint returns a simple table of result links + snippets.
+                links = re.findall(r'<a[^>]+class="result-link"[^>]*href="([^"]+)"[^>]*>(.*?)</a>', body, re.DOTALL)
+                snippets = re.findall(r'<td[^>]*class="result-snippet"[^>]*>(.*?)</td>', body, re.DOTALL)
+
+                # Fallback to the older html-endpoint markup if present
+                if not links:
+                    snippets = re.findall(r'<a class="result__snippet".*?>(.*?)</a>', body, re.DOTALL)
+                    titles = re.findall(r'<a class="result__a".*?>(.*?)</a>', body, re.DOTALL)
+                    urls = re.findall(r'<span class="result__url">(.*?)</span>', body, re.DOTALL)
+                    links = list(zip(urls or [""] * len(titles), titles))
+
+                for i in range(min(len(links), max_results)):
+                    raw_url, raw_title = links[i]
+                    clean_snippet = re.sub(r'<.*?>', '', snippets[i]).strip() if i < len(snippets) else ""
+                    clean_title = re.sub(r'<.*?>', '', raw_title).strip()
+                    display_url = re.sub(r'<.*?>', '', raw_url).strip() or "Trusted Web Source"
+
                     # Extract domain name for easier citation
                     domain = display_url.replace("www.", "").split("/")[0]
                     

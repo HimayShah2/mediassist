@@ -2,28 +2,25 @@ from pathlib import Path
 import hashlib
 from loguru import logger
 from langchain.schema import Document
-from nim.nim_key_manager import NIMKeyManager, ModelRole
 
+from llm.server_client import ServerLLMClient
 from rag.vector_store import ChromaVectorStore
 from rag.chunker import Chunker
 from rag.document_loader_factory import DocumentLoaderFactory
 from rag.embedder import Embedder
-from rag.reranker import NIMReranker
 from rag.web_search import DuckDuckGoSearcher
 
 class DocumentManager:
     CHUNK_SIZE    = 800
     CHUNK_OVERLAP = 120
     TOP_K_RETRIEVE = 15
-    TOP_K_RERANK   = 5
-    MIN_SIMILARITY = 0.75
+    MIN_SIMILARITY = 0.50
 
-    def __init__(self, key_manager: NIMKeyManager, db_path: str):
-        self.key_manager = key_manager
+    def __init__(self, llm_client: ServerLLMClient, db_path: str):
+        self.llm_client = llm_client
         self.vector_store = ChromaVectorStore(db_path)
         self.chunker = Chunker(chunk_size=self.CHUNK_SIZE, chunk_overlap=self.CHUNK_OVERLAP)
-        self.embedder_factory = Embedder(key_manager)
-        self.reranker = NIMReranker(key_manager=key_manager, top_n=self.TOP_K_RERANK)
+        self.embedder_factory = Embedder()
         self.web_searcher = DuckDuckGoSearcher()
 
     def _get_embedder(self):
@@ -80,30 +77,35 @@ class DocumentManager:
     async def retrieve(self, query: str, collections: list[str], n_results: int = None, trusted_sites: list[str] = None) -> list[dict]:
         n   = n_results or self.TOP_K_RETRIEVE
         emb = self._get_embedder()
-        q_embedding = emb.embed_query(query)
         all_results = []
-
-        for col_name in collections:
-            try:
-                col = self.vector_store.get_collection(col_name)
-                res = col.query(query_embeddings=[q_embedding],
-                                n_results=min(n, col.count()))
-                if not res["documents"] or not res["documents"][0]:
+        
+        try:
+            q_embedding = emb.embed_query(query)
+            
+            for col_name in collections:
+                try:
+                    col = self.vector_store.get_collection(col_name)
+                    res = col.query(query_embeddings=[q_embedding],
+                                    n_results=min(n, col.count()))
+                    if not res["documents"] or not res["documents"][0]:
+                        continue
+                    for doc, meta, dist in zip(res["documents"][0],
+                                               res["metadatas"][0],
+                                               res["distances"][0]):
+                        # Filter by minimum similarity (convert distance to similarity)
+                        similarity = 1.0 - dist
+                        if similarity >= self.MIN_SIMILARITY:
+                            all_results.append({
+                                "text": doc, "metadata": meta,
+                                "similarity": round(similarity, 4),
+                                "collection": col_name
+                            })
+                except Exception as e:
+                    logger.warning(f"Collection {col_name} retrieval error: {e}")
                     continue
-                for doc, meta, dist in zip(res["documents"][0],
-                                           res["metadatas"][0],
-                                           res["distances"][0]):
-                    # Filter by minimum similarity (convert distance to similarity)
-                    similarity = 1.0 - dist
-                    if similarity >= self.MIN_SIMILARITY:
-                        all_results.append({
-                            "text": doc, "metadata": meta,
-                            "similarity": round(similarity, 4),
-                            "collection": col_name
-                        })
-            except Exception as e:
-                logger.warning(f"Collection {col_name} retrieval error: {e}")
-                continue
+        except Exception as e:
+            logger.warning(f"Local embedding failed (likely because LM Studio model doesn't support embeddings): {e}")
+            # Fallback will happen naturally below since all_results is empty
 
         # If no results found in local RAG, fallback to web search
         if not all_results:
@@ -112,26 +114,7 @@ class DocumentManager:
             all_results.extend(web_results)
 
         sorted_results = sorted(all_results, key=lambda x: x["similarity"], reverse=True)
-        top_results = sorted_results[:n]
-        
-        if top_results:
-            try:
-                docs = [Document(page_content=r["text"], metadata=r["metadata"]) for r in top_results]
-                compressed_docs = self.reranker.compress_documents(docs, query)
-                
-                reranked_results = []
-                for doc in compressed_docs:
-                    orig = next((r for r in top_results if r["text"] == doc.page_content), None)
-                    if orig:
-                        orig["rerank_score"] = doc.metadata.get("rerank_score")
-                        reranked_results.append(orig)
-                
-                top_results = reranked_results
-            except Exception as e:
-                logger.warning(f"Reranking error: {e}")
-                top_results = top_results[:self.TOP_K_RERANK]
-                
-        return top_results
+        return sorted_results[:n]
 
     def get_stats(self) -> dict:
         """Returns collection sizes for admin dashboard."""

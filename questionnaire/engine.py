@@ -5,7 +5,7 @@ from openai import AsyncOpenAI
 from loguru import logger
 
 from models.questionnaire import QuestionnaireRound, SessionAnswers
-from nim.nim_key_manager import NIMKeyManager, ModelRole
+from llm.server_client import ServerLLMClient
 from rag.document_manager import DocumentManager
 from config.settings import VISIT_TYPE_RAG_MAP, VISIT_TYPE_ROLE_MAP
 from .prompt_templates import PromptTemplates
@@ -14,8 +14,8 @@ from .red_flag_detector import RedFlagDetector
 class QuestionnaireEngine:
     MAX_RETRIES = 3
 
-    def __init__(self, key_manager: NIMKeyManager, doc_manager: DocumentManager):
-        self.key_manager      = key_manager
+    def __init__(self, llm_client: ServerLLMClient, doc_manager: DocumentManager):
+        self.llm_client       = llm_client
         self.doc_manager      = doc_manager
         self.prompts          = PromptTemplates()
         self.flag_detector    = RedFlagDetector()
@@ -23,29 +23,14 @@ class QuestionnaireEngine:
         self.raw_llm_log      = []    # Stored for physician raw data access
         self.raw_rag_log      = []    # Stored for physician raw data access
 
-    def _get_instructor_client(self, role: ModelRole):
-        key = self.key_manager.get_key_for_role(role)
-        if not key:
-            # Handle offline fallback if no key available
-            logger.error("No API key available for role")
-            return None, "offline:biomistral-7b", -1
-            
-        base_client = AsyncOpenAI(
-            base_url="https://integrate.api.nvidia.com/v1",
-            api_key=key.key_value,
-            timeout=45.0,
-            max_retries=0
-        )
-        return instructor.from_openai(base_client), self.key_manager.get_model_for_role(role), key.key_id
-
     async def generate_round(self, round_number: int, visit_type: str,
                               patient_ctx: dict, specialty: str) -> QuestionnaireRound:
         
         # Use blueprint mapping for role, default to STANDARD if missing
-        role = VISIT_TYPE_ROLE_MAP.get(visit_type, ModelRole.STANDARD)
+        role = VISIT_TYPE_ROLE_MAP.get(visit_type, "STANDARD")
         # Always use MEDICAL for the final refinement round
         if round_number == 4:
-            role = ModelRole.MEDICAL
+            role = "MEDICAL"
             
         # DOMAIN RESTRICTION LOGIC
         # Standard domains map directly to collection names
@@ -70,7 +55,7 @@ class QuestionnaireEngine:
         # DocumentManager.retrieve should now handle trusted_sites
         rag_chunks  = await self.doc_manager.retrieve(query, collections, n_results=15, trusted_sites=trusted_sites)
         self.raw_rag_log.extend(rag_chunks)
-        rag_text    = "\n\n".join([f"SOURCE [{c['metadata']['source_file']}]: {c['text']}" for c in rag_chunks[:5]])
+        rag_text    = "\n\n".join([f"SOURCE [{c.get('metadata', {}).get('source_file', 'unknown')}]: {c['text']}" for c in rag_chunks[:5]])
 
         prompt      = self.prompts.get_round_prompt(
             round_number=round_number,
@@ -81,11 +66,9 @@ class QuestionnaireEngine:
             rag_context=rag_text
         )
 
-        client, model, key_id = self._get_instructor_client(role)
-        if not client:
-             raise RuntimeError("LLM client initialization failed (no keys?)")
-
-        # Explicitly instruct the model to ONLY use provided context and quote sites
+        from config.settings import settings
+        
+        from config.settings import settings
         grounding_prefix = """
 CRITICAL GROUNDING RULES:
 1. You MUST answer ONLY based on the provided RAG context below.
@@ -93,12 +76,10 @@ CRITICAL GROUNDING RULES:
 3. Do NOT use your own internal knowledge if it contradicts the context. 
 4. Cite sources verbatim in the 'rag_context_used' array.
 """
-        
         start = time.time()
         for attempt in range(self.MAX_RETRIES):
             try:
-                result: QuestionnaireRound = await client.chat.completions.create(
-                    model=model,
+                result: QuestionnaireRound = await self.llm_client.generate_structured(
                     response_model=QuestionnaireRound,
                     messages=[{"role": "system", "content": grounding_prefix}, {"role": "user", "content": prompt}],
                     temperature=settings.ai_temperature,
@@ -106,10 +87,10 @@ CRITICAL GROUNDING RULES:
                 )
                 duration = int((time.time() - start) * 1000)
                 result.generation_time_ms = duration
-                result.model_used         = model
-                result.rag_chunk_ids      = [c["metadata"]["chunk_id"] for c in rag_chunks[:5]]
-                self.raw_llm_log.append({"round": round_number, "model": model,
-                                          "key_id": key_id, "duration_ms": duration})
+                result.model_used         = "local-model"
+                result.rag_chunk_ids      = [c.get("metadata", {}).get("chunk_id", "") for c in rag_chunks[:5]]
+                self.raw_llm_log.append({"round": round_number, "model": "local-model",
+                                          "duration_ms": duration})
                 logger.info(f"Round {round_number} generated: {len(result.questions)} questions in {duration}ms")
                 return result
             except Exception as e:

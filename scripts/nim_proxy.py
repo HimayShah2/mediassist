@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 # Add parent dir to path to import nim package
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from nim.nim_key_manager import NIMKeyManager, ModelRole, ROLE_MODEL_MAP
+from llm.local_client import LocalLLMClient, ROLE_MODEL_MAP
 
 load_dotenv()
 

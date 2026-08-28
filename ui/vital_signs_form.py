@@ -1,6 +1,7 @@
-from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
-                               QLineEdit, QRadioButton, QTabWidget, 
-                               QStackedWidget, QFormLayout, QGroupBox)
+from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
+                               QLineEdit, QRadioButton, QTabWidget,
+                               QStackedWidget, QFormLayout, QGroupBox, QPushButton)
+from PySide6.QtCore import Signal
 
 class VitalSignsForm(QWidget):
     def __init__(self, parent=None):
@@ -32,6 +33,9 @@ class VitalSignsForm(QWidget):
         }
 
 class VitalSignsManager(QWidget):
+    # Emitted when the nurse confirms vitals and requests the physician brief.
+    vitals_submitted = Signal(dict)
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.layout = QVBoxLayout(self)
@@ -70,7 +74,29 @@ class VitalSignsManager(QWidget):
         self.inline_layout.addWidget(self.vitals_form)
         
         self.rb_inline.toggled.connect(self.switch_mode)
-        
+
+        # Submit / generate report
+        self.btn_generate = QPushButton("Confirm Vitals && Generate Physician Brief")
+        self.btn_generate.setMinimumHeight(50)
+        self.btn_generate.setObjectName("action_primary")
+        self.btn_generate.clicked.connect(self._on_generate_clicked)
+        self.layout.addWidget(self.btn_generate)
+
+        self.status_label = QLabel("")
+        self.status_label.setStyleSheet("color: #7f8fa6; font-style: italic;")
+        self.layout.addWidget(self.status_label)
+
+    def _on_generate_clicked(self):
+        self.btn_generate.setEnabled(False)
+        self.btn_generate.setText("Generating Physician Brief… (this can take several minutes)")
+        self.status_label.setText("The local AI model is analysing the intake. Please wait.")
+        self.vitals_submitted.emit(self.get_vitals())
+
+    def reset_generate_button(self):
+        self.btn_generate.setEnabled(True)
+        self.btn_generate.setText("Confirm Vitals && Generate Physician Brief")
+        self.status_label.setText("")
+
     def switch_mode(self):
         self.vitals_form.setParent(None)
         

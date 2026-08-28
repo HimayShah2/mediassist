@@ -1,8 +1,6 @@
-import instructor
-from openai import AsyncOpenAI
 from pydantic import BaseModel
 from typing import List, Optional
-from nim.nim_key_manager import NIMKeyManager, ModelRole
+from llm.server_client import ServerLLMClient
 from models.report_output import PhysicianBrief
 
 class ConsensusResult(BaseModel):
@@ -11,27 +9,27 @@ class ConsensusResult(BaseModel):
     consensus_score: float
 
 class ConsensusValidator:
-    def __init__(self, key_manager: NIMKeyManager):
-        self.key_manager = key_manager
+    def __init__(self, llm_client: ServerLLMClient):
+        self.llm_client = llm_client
 
     async def validate(self, brief: PhysicianBrief, patient_ctx: dict, rag_text: str) -> ConsensusResult:
-        key = self.key_manager.get_key_for_role(ModelRole.STANDARD)
-        client = instructor.from_openai(AsyncOpenAI(
-            base_url="https://integrate.api.nvidia.com/v1",
-            api_key=key.key_value
-        ))
-        
         prompt = f"""
 Review the following physician brief and patient context. 
 Do you agree with the top differential? 
 Brief Differentials: {[d.condition_name for d in brief.differentials]}
 Patient Context: {patient_ctx}
 """
-        return await client.chat.completions.create(
-            model=self.key_manager.get_model_for_role(ModelRole.STANDARD),
-            response_model=ConsensusResult,
-            messages=[{"role": "user", "content": prompt}]
-        )
+        try:
+            return await self.llm_client.generate_structured(
+                response_model=ConsensusResult,
+                messages=[{"role": "user", "content": prompt}]
+            )
+        except Exception as e:
+            from loguru import logger
+            logger.warning(f"Consensus validation failed: {e}")
+            return ConsensusResult(agrees_with_top_differential=True,
+                                   alternative_differentials=[],
+                                   consensus_score=0.0)
 
     def merge_consensus(self, brief: PhysicianBrief, consensus: ConsensusResult) -> PhysicianBrief:
         # Update brief based on consensus if needed

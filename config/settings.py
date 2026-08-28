@@ -13,26 +13,6 @@ class Settings(BaseSettings):
     def get_db_url(self) -> str:
         return self.database_url
     
-    # NVIDIA NIM API configuration
-    nvidia_nim_api_key: Optional[str] = None
-    nim_api_key_1: Optional[str] = None
-    nim_api_key_2: Optional[str] = None
-    nim_api_key_3: Optional[str] = None
-    nim_api_key_4: Optional[str] = None
-    nim_api_key_5: Optional[str] = None
-    nim_api_key_6: Optional[str] = None
-    nim_api_key_7: Optional[str] = None
-
-    def get_nim_keys(self) -> list[str]:
-        keys = []
-        if self.nim_api_key_1: keys.append(self.nim_api_key_1)
-        if self.nim_api_key_2: keys.append(self.nim_api_key_2)
-        if self.nim_api_key_3: keys.append(self.nim_api_key_3)
-        if self.nim_api_key_4: keys.append(self.nim_api_key_4)
-        if self.nim_api_key_5: keys.append(self.nim_api_key_5)
-        if self.nim_api_key_6: keys.append(self.nim_api_key_6)
-        if self.nim_api_key_7: keys.append(self.nim_api_key_7)
-        return keys
 
     # Security
     secret_key: str = "your-super-secret-key-change-in-production"
@@ -50,7 +30,7 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
-from nim.nim_key_manager import ModelRole
+
 
 VISIT_TYPE_RAG_MAP = {
     "Vaccination/Immunization Visit": ["vaccination", "cdc_guidelines", "who_guidelines"],
@@ -63,13 +43,13 @@ VISIT_TYPE_RAG_MAP = {
 }
 
 VISIT_TYPE_ROLE_MAP = {
-    "Vaccination/Immunization Visit": ModelRole.FAST,
-    "General/Routine Checkup": ModelRole.STANDARD,
-    "Specific Complaint / Acute Visit": ModelRole.MEDICAL,
-    "Follow-up for Previous Condition": ModelRole.STANDARD,
-    "Maternal/Antenatal Care": ModelRole.MEDICAL,
-    "Pediatric Well-Visit": ModelRole.MEDICAL,
-    "Mental Health Screening": ModelRole.MEDICAL
+    "Vaccination/Immunization Visit": "FAST",
+    "General/Routine Checkup": "STANDARD",
+    "Specific Complaint / Acute Visit": "MEDICAL",
+    "Follow-up for Previous Condition": "STANDARD",
+    "Maternal/Antenatal Care": "MEDICAL",
+    "Pediatric Well-Visit": "MEDICAL",
+    "Mental Health Screening": "MEDICAL"
 }
 
 settings = Settings()

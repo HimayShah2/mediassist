@@ -163,3 +163,35 @@ cython_debug/
 # Custom database files
 mediassist.db
 *.db
+
+# ---- MediAssist Pro: large / local artefacts (added by fix pass) ----
+.venv/
+venv/
+models_local/
+models/*.gguf
+*.gguf
+*.bin
+*.onnx
+*.pt
+*.safetensors
+dist/
+build/
+main.dist/
+main.build/
+*.dist/
+*.build/
+data/
+test_db/
+knowledge_base/chroma_db/
+logs/
+*.db
+*.db-shm
+*.db-wal
+.env
+pyinstaller_*.txt
+output.txt
+progress.html
+tests/*.json
+tests/*.csv
+test_reports/
+document-echo/

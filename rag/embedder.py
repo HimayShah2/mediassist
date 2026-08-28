@@ -1,16 +1,22 @@
+import os
+from loguru import logger
 from langchain_openai import OpenAIEmbeddings
-from nim.nim_key_manager import NIMKeyManager, ModelRole
+
+# Default to the standard local API port used by LM Studio / Ollama
+DEFAULT_BASE_URL = os.getenv("LLM_BASE_URL", "http://127.0.0.1:1234/v1")
 
 class Embedder:
-    def __init__(self, key_manager: NIMKeyManager):
-        self.key_manager = key_manager
-        
-    def get_embeddings(self) -> OpenAIEmbeddings:
-        key = self.key_manager.get_key_for_role(ModelRole.EMBED)
-        base = "https://integrate.api.nvidia.com/v1"
-        return OpenAIEmbeddings(
-            model=self.key_manager.get_model_for_role(ModelRole.EMBED),
-            api_key=key.key_value,
-            base_url=base,
-            check_embedding_ctx_length=False  # Crucial: prevents tiktoken from parsing strings to token arrays
+    def __init__(self):
+        logger.info("Connecting to Standalone Local Embeddings Server...")
+        self.embed_fn = OpenAIEmbeddings(
+            base_url=DEFAULT_BASE_URL,
+            api_key="not-needed",
+            model=os.getenv("LLM_EMBED_MODEL", "google/gemma-4-e4b"),
+            # Local llama.cpp / LM Studio servers expect raw text, not pre-tokenised
+            # integer arrays. Disable langchain's tiktoken pre-tokenisation.
+            check_embedding_ctx_length=False,
+            tiktoken_enabled=False,
         )
+
+    def get_embeddings(self):
+        return self.embed_fn

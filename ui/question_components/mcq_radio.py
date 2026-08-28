@@ -11,6 +11,7 @@ class MCQRADIO(QFrame):
 
     def __init__(self, question: Question, parent=None):
         super().__init__(parent)
+        self.question = question
         self.setProperty("role", "option-container")
         self.layout = QVBoxLayout(self)
         self.layout.setContentsMargins(0, 0, 0, 0)
@@ -48,7 +49,8 @@ class MCQRADIO(QFrame):
     def get_answer(self) -> str:
         selected = self.btn_group.checkedButton()
         if selected:
-            # We need to map back to ID if we didn't store it in the button
-            # Simple approach: find which one is checked
-            pass
+            # Re-map the button text back to option ID
+            for opt in self.question.options:
+                if opt.label == selected.text():
+                    return opt.id
         return ""

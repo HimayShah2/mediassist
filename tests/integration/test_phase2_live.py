@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, patch
 
 from models.questionnaire import QuestionnaireRound, Question, OptionType
 from nim.nim_client import NIMClient
-from nim.nim_key_manager import ModelRole
+
 
 # Toggle live API vs mocked responses
 # Use: export TEST_LIVE_API=1 to run against the real NVIDIA NIM endpoints

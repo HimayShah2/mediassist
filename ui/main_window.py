@@ -201,8 +201,11 @@ class MainWindow(QMainWindow):
 
         engine = self.controller.questionnaire_engine
         flags_raised = list(getattr(engine.session_answers, "flags_raised", []) or [])
+        brief_flag_levels = [str(f.get("level", "")) if isinstance(f, dict) else str(f)
+                             for f in (brief_dict.get("flags", []) or [])]
         is_emergency = bool(brief_dict.get("is_emergency")) or any(
-            ("RED" in str(f).upper() or "EMERGENCY" in str(f).upper()) for f in flags_raised
+            ("RED" in str(x).upper() or "EMERGENCY" in str(x).upper())
+            for x in (flags_raised + brief_flag_levels)
         )
         merged_flags = list(brief_dict.get("flags", []) or [])
         for f in flags_raised:

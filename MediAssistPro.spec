@@ -18,9 +18,12 @@ hiddenimports = [
     'PySide6', 'chromadb', 'chromadb.telemetry.product.posthog',
     'chromadb.api.segment', 'hnswlib', 'pydantic', 'uvicorn', 'fastapi',
     'onnxruntime', 'llama_cpp', 'sse_starlette',
+    'huggingface_hub', 'tokenizers',
+    'chromadb.utils.embedding_functions.onnx_mini_lm_l6_v2',
+    'llm.local_engine', 'llm.model_bootstrap', 'llm.server_client',
 ]
 
-for pkg in ('chromadb', 'llama_cpp'):
+for pkg in ('chromadb', 'llama_cpp', 'tokenizers'):
     try:
         d, b, h = collect_all(pkg)
         datas += d; binaries += b; hiddenimports += h

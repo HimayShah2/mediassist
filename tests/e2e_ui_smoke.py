@@ -13,6 +13,8 @@ import sys
 import traceback
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+# Use the lightweight HTTP client (no model load); the LLM is mocked below anyway.
+os.environ.setdefault("LLM_BASE_URL", "http://127.0.0.1:59999/v1")
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 FAILURES = []

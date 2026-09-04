@@ -3,7 +3,6 @@ from loguru import logger
 from typing import Callable, Optional
 
 from config.settings import Settings
-from llm.server_client import ServerLLMClient
 from rag.document_manager import DocumentManager
 from questionnaire.engine import QuestionnaireEngine
 from report.report_generator import ReportGenerator
@@ -32,9 +31,8 @@ class AppController:
         self._log("Initializing Database schema...")
         init_db()
         
-        self._log("Connecting to Standalone Local Server...")
-        self.llm_client = ServerLLMClient()
-        
+        self.llm_client = self._init_llm()
+
         self._log("Initializing Document Manager (RAG)...")
         # Ensure chroma_db directory exists
         db_path = os.path.join(os.getcwd(), "knowledge_base", "chroma_db")
@@ -48,6 +46,25 @@ class AppController:
         self.report_generator = ReportGenerator(self.llm_client, self.doc_manager)
         
         self._log("System Ready.")
+
+    def _init_llm(self):
+        """Prefer an in-process local model (zero setup for the user). If the user
+        has explicitly pointed at an external OpenAI-compatible server via
+        LLM_BASE_URL, use that instead."""
+        if os.getenv("LLM_BASE_URL"):
+            self._log(f"Connecting to external LLM server at {os.getenv('LLM_BASE_URL')}...")
+            from llm.server_client import ServerLLMClient
+            return ServerLLMClient()
+
+        self._log("Preparing the local AI model...")
+        from llm.model_bootstrap import resolve_model_path
+        model_path = resolve_model_path(progress=self._model_progress)
+        self._log("Loading the local AI model (first run can take a minute)...")
+        from llm.local_engine import LocalLlamaClient
+        return LocalLlamaClient(model_path=model_path)
+
+    def _model_progress(self, frac: float, status: str):
+        self._log(status)
 
     def _log(self, message: str):
         logger.info(message)

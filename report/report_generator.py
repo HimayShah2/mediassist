@@ -40,19 +40,24 @@ class ReportGenerator:
             specialty=specialty
         )
 
+        from config.settings import settings as _settings
+        _rep_tokens = getattr(_settings, "ai_report_max_tokens", 3000)
         primary_brief: PhysicianBrief = await self.llm_client.generate_structured(
             response_model=PhysicianBrief,
             messages=[{"role": "user", "content": medical_prompt}],
-            temperature=0.1, max_tokens=8192
+            temperature=0.1, max_tokens=_rep_tokens
         )
 
         # Consensus validation
         consensus_result = await self.validator.validate(primary_brief, patient_ctx, rag_text)
         primary_brief = self.validator.merge_consensus(primary_brief, consensus_result)
 
-        # Assign ICD codes
+        # Assign ICD codes — one batched call for all differentials
+        icd_map = await self.icd_mapper.map_many([d.condition_name for d in primary_brief.differentials])
         for diff in primary_brief.differentials:
-            icd = await self.icd_mapper.map(diff.condition_name)
+            icd = icd_map.get(diff.condition_name.strip().lower())
+            if icd is None:
+                icd = await self.icd_mapper.map(diff.condition_name)
             diff.icd_10_code = icd.icd_10
             diff.icd_11_code = icd.icd_11
 

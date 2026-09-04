@@ -19,6 +19,9 @@ echo (Leave this window open while using MediAssist Pro)
     --host 127.0.0.1 ^
     --port 1234 ^
     --n_ctx 4096 ^
+    --n_threads 12 ^
+    --n_threads_batch 12 ^
+    --n_batch 512 ^
     --logits_all false
 
 pause

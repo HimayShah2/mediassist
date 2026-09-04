@@ -25,7 +25,8 @@ class Settings(BaseSettings):
     
     # AI Parameters
     ai_temperature: float = 0.0
-    ai_max_tokens: int = 4096
+    ai_max_tokens: int = 1536      # enough for a 6-8 question round; keeps CPU latency down
+    ai_report_max_tokens: int = 3000
     ai_top_p: float = 1.0
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")

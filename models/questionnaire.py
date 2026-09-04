@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from typing import Optional, Literal, List
 from enum import Enum
 
@@ -29,6 +29,37 @@ class Question(BaseModel):
     is_mandatory:     bool = True
     body_map_region:  Optional[str] = None   # Which SVG body region to pre-highlight
     triggers_followup: Optional[str] = None  # question_id of conditional follow-up
+
+    @model_validator(mode="after")
+    def _ensure_answerable(self):
+        """LLMs (especially under grammar-constrained decoding) sometimes emit a
+        radio/checkbox/scale question with no options, which renders as an
+        un-answerable label. Repair it so the intake never dead-ends."""
+        t = self.type
+        opts = self.options or []
+
+        if t == OptionType.SCALE and len(opts) < 2:
+            self.options = [MCQOption(id=str(i), label=str(i), value=i) for i in range(0, 11)]
+        elif t in (OptionType.RADIO, OptionType.CHECKBOX) and len(opts) < 2:
+            txt = self.text.lower()
+            if any(w in txt for w in ("scale of 0", "0 to 10", "0-10", "rate ", "severity")):
+                self.type = OptionType.SCALE
+                self.options = [MCQOption(id=str(i), label=str(i), value=i) for i in range(0, 11)]
+            else:
+                # Fall back to a yes/no/unsure single-select — always answerable.
+                self.type = OptionType.RADIO
+                self.options = [
+                    MCQOption(id="yes", label="Yes"),
+                    MCQOption(id="no", label="No"),
+                    MCQOption(id="unsure", label="Not sure / prefer not to say"),
+                ]
+        # ensure option ids are unique & non-empty
+        seen = set()
+        for i, o in enumerate(self.options or []):
+            if not o.id or o.id in seen:
+                o.id = f"opt{i}"
+            seen.add(o.id)
+        return self
 
 class QuestionnaireRound(BaseModel):
     round_number:       int

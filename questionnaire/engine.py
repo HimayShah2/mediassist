@@ -12,7 +12,7 @@ from .prompt_templates import PromptTemplates
 from .red_flag_detector import RedFlagDetector
 
 class QuestionnaireEngine:
-    MAX_RETRIES = 3
+    MAX_RETRIES = 2
 
     def __init__(self, llm_client: ServerLLMClient, doc_manager: DocumentManager):
         self.llm_client       = llm_client

@@ -23,17 +23,12 @@ hiddenimports = [
     'llm.local_engine', 'llm.model_bootstrap', 'llm.server_client',
 ]
 
-for pkg in ('chromadb', 'llama_cpp', 'tokenizers'):
+for pkg in ('chromadb', 'llama_cpp', 'tokenizers', 'onnxruntime', 'huggingface_hub'):
     try:
         d, b, h = collect_all(pkg)
         datas += d; binaries += b; hiddenimports += h
     except Exception:
         pass
-
-try:
-    binaries += collect_dynamic_libs('onnxruntime')
-except Exception:
-    pass
 
 a = Analysis(
     ['main.py'],

@@ -1,6 +1,25 @@
 import csv
 import os
+from typing import List, Dict, Any
 from loguru import logger
+
+
+class CSVParser:
+    """Stateless CSV parser matching the DataImporter parser interface
+    (parse(filepath) -> list of row dicts)."""
+
+    is_available = True
+
+    def parse(self, filepath: str) -> List[Dict[str, Any]]:
+        rows: List[Dict[str, Any]] = []
+        try:
+            with open(filepath, mode="r", encoding="utf-8-sig", newline="") as f:
+                for row in csv.DictReader(f):
+                    rows.append({k: v for k, v in row.items() if k})
+        except Exception as e:
+            logger.error(f"CSV parse failed for {filepath}: {e}")
+        return rows
+
 
 class CSVHistoryParser:
     """Backend parser for legacy patient history CSV files (Blueprint §21)."""

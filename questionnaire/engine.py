@@ -107,7 +107,17 @@ GROUNDING RULES:
             except Exception as e:
                 logger.warning(f"Round {round_number} generation attempt {attempt+1} failed: {e}")
                 if attempt == self.MAX_RETRIES - 1:
-                    raise RuntimeError(f"Failed to generate round {round_number} after {self.MAX_RETRIES} attempts")
+                    msg = str(e)
+                    if "Connection" in msg or "connect" in msg.lower() or "refused" in msg.lower():
+                        raise RuntimeError(
+                            "Cannot reach the local AI server at "
+                            f"{__import__('os').getenv('LLM_BASE_URL', 'http://127.0.0.1:1234/v1')}. "
+                            "Start it with start_local_llm.bat (or Run_MediAssist_Dev.bat) and retry."
+                        )
+                    raise RuntimeError(
+                        f"The AI returned an unusable response for round {round_number} "
+                        f"after {self.MAX_RETRIES} attempts. Try again. ({msg[:150]})"
+                    )
 
     def submit_round_answers(self, round_number: int, answers: dict, scoring_tool_id: str = None,
                              questions: list = None):

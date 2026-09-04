@@ -114,15 +114,70 @@ class SettingsUI(QWidget):
         self.import_layout = QHBoxLayout()
         
         self.import_path = QLineEdit()
-        self.import_path.setPlaceholderText("Path to old patient histories (CSV/Excel)...")
+        self.import_path.setPlaceholderText("Path to old patient histories (CSV/Excel/PDF/HL7/FHIR)...")
         self.btn_import = QPushButton("Browse & Import")
-        
+        self.btn_import.clicked.connect(self._browse_and_import)
+
         self.import_layout.addWidget(self.import_path)
         self.import_layout.addWidget(self.btn_import)
         self.import_group.setLayout(self.import_layout)
         self.layout.addWidget(self.import_group)
 
         self.layout.addStretch()
+
+    def _browse_and_import(self):
+        from PySide6.QtWidgets import QFileDialog
+        path = self.import_path.text().strip()
+        if not path:
+            path, _ = QFileDialog.getOpenFileName(
+                self, "Select a records file", "",
+                "Records (*.csv *.xlsx *.xls *.pdf *.hl7 *.json *.fhir);;All files (*)")
+            if not path:
+                return
+            self.import_path.setText(path)
+        try:
+            from data_port.importer import DataImporter
+            records = DataImporter().import_file(path)
+        except Exception as e:
+            logger.error(f"Import failed: {e}")
+            QMessageBox.critical(self, "Import failed", str(e))
+            return
+        if not records:
+            QMessageBox.warning(self, "Nothing imported",
+                                "No records were parsed (unsupported format or missing optional "
+                                "dependency for this file type).")
+            return
+        created = self._persist_imported(records)
+        QMessageBox.information(self, "Import complete",
+                                f"Parsed {len(records)} record(s); {created} new patient(s) added.")
+
+    def _persist_imported(self, records):
+        if not self.controller:
+            return 0
+        import datetime
+        from models.db_models import Patient
+        from patient.case_number import generate_case_number
+        created = 0
+        session = self.controller.get_db_session()
+        try:
+            for rec in records:
+                fn = rec.get("first_name") or rec.get("First") or rec.get("firstName") or "Imported"
+                ln = rec.get("last_name") or rec.get("Last") or rec.get("lastName") or "Patient"
+                cn = rec.get("case_number") or rec.get("mrn") or generate_case_number(session, "IMP")
+                if session.query(Patient).filter(Patient.case_number == cn).first():
+                    continue
+                session.add(Patient(case_number=cn, first_name=str(fn), last_name=str(ln),
+                                    date_of_birth=str(rec.get("dob") or "1970-01-01"),
+                                    gender=str(rec.get("gender") or "unknown"),
+                                    notes="Imported from legacy records"))
+                created += 1
+            session.commit()
+        except Exception as e:
+            session.rollback()
+            logger.error(f"Persist imported failed: {e}")
+        finally:
+            session.close()
+        return created
 
     def _save_ai_settings(self):
         from config.settings import settings

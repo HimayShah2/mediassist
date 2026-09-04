@@ -78,10 +78,30 @@ class QuestionnaireRound(BaseModel):
     model_config = {"protected_namespaces": ()}
 
 class SessionAnswers(BaseModel):
-    """Accumulated answers across all rounds — passed as context to each subsequent round."""
+    """Accumulated answers across all rounds — passed as context to each subsequent round.
+
+    Rounds 1-4 are mandatory; rounds 5-10 are adaptive follow-ups the engine adds
+    when the clinical picture is not yet clear enough for the physician brief.
+    """
     round_1: Optional[dict] = None
     round_2: Optional[dict] = None
     round_3: Optional[dict] = None
     round_4: Optional[dict] = None
+    round_5: Optional[dict] = None
+    round_6: Optional[dict] = None
+    round_7: Optional[dict] = None
+    round_8: Optional[dict] = None
+    round_9: Optional[dict] = None
+    round_10: Optional[dict] = None
     vital_signs: Optional[dict] = None
     flags_raised: List[str] = []
+
+
+class SufficiencyAssessment(BaseModel):
+    """The engine's judgement, after the mandatory rounds, on whether enough has
+    been gathered to hand a safe brief to the physician."""
+    sufficient_for_brief: bool
+    reason: str
+    focus_areas: List[str] = Field(default_factory=list)        # what still needs clarifying
+    unresolved_flags: List[str] = Field(default_factory=list)   # raised flags not yet characterised
+    leading_differentials: List[str] = Field(default_factory=list)

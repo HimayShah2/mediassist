@@ -84,11 +84,18 @@ def main():
     # --- mock the engine + report generator (no LLM) ---
     eng = controller.questionnaire_engine
 
-    async def fake_generate_round(round_number, visit_type, patient_ctx, specialty):
+    async def fake_generate_round(round_number, visit_type, patient_ctx, specialty, focus=None):
         r = build_round(round_number)
         eng._round_questions[round_number] = r.questions
         return r
     eng.generate_round = fake_generate_round
+
+    # Deterministic: exactly the 4 mandatory rounds, then done.
+    async def fake_next_step(round_number, visit_type, patient_ctx, specialty):
+        if round_number < 4:
+            return {"action": "round", "round": round_number + 1, "focus": None}
+        return {"action": "complete", "assessment": {"sufficient_for_brief": True}}
+    eng.next_step = fake_next_step
 
     async def fake_report(**kw):
         return build_brief()

@@ -4,7 +4,7 @@ import instructor
 from openai import AsyncOpenAI
 from loguru import logger
 
-from models.questionnaire import QuestionnaireRound, SessionAnswers
+from models.questionnaire import QuestionnaireRound, SessionAnswers, SufficiencyAssessment
 from llm.server_client import ServerLLMClient
 from rag.document_manager import DocumentManager
 from config.settings import VISIT_TYPE_RAG_MAP, VISIT_TYPE_ROLE_MAP
@@ -13,6 +13,8 @@ from .red_flag_detector import RedFlagDetector
 
 class QuestionnaireEngine:
     MAX_RETRIES = 2
+    MANDATORY_ROUNDS = 4      # always asked, in full
+    MAX_ROUNDS = 10          # hard safety cap on adaptive follow-ups
 
     def __init__(self, llm_client: ServerLLMClient, doc_manager: DocumentManager):
         self.llm_client       = llm_client
@@ -25,12 +27,13 @@ class QuestionnaireEngine:
         self._round_questions = {}    # round_number -> [Question], for scoring/flag resolution
 
     async def generate_round(self, round_number: int, visit_type: str,
-                              patient_ctx: dict, specialty: str) -> QuestionnaireRound:
-        
+                              patient_ctx: dict, specialty: str,
+                              focus: dict = None) -> QuestionnaireRound:
+
         # Use blueprint mapping for role, default to STANDARD if missing
         role = VISIT_TYPE_ROLE_MAP.get(visit_type, "STANDARD")
-        # Always use MEDICAL for the final refinement round
-        if round_number == 4:
+        # Always use MEDICAL for the final refinement round and follow-ups
+        if round_number >= 4:
             role = "MEDICAL"
             
         # DOMAIN RESTRICTION LOGIC
@@ -64,7 +67,8 @@ class QuestionnaireEngine:
             specialty=specialty,
             patient_ctx=patient_ctx,
             session_answers=self.session_answers.dict(),
-            rag_context=rag_text
+            rag_context=rag_text,
+            focus=focus,
         )
 
         from config.settings import settings
@@ -86,11 +90,14 @@ GROUNDING RULES:
         start = time.time()
         for attempt in range(self.MAX_RETRIES):
             try:
+                # Mandatory rounds are comprehensive (6-10 questions) so give them room;
+                # focused follow-ups are short.
+                round_tokens = 3072 if round_number <= self.MANDATORY_ROUNDS else 1536
                 result: QuestionnaireRound = await self.llm_client.generate_structured(
                     response_model=QuestionnaireRound,
                     messages=[{"role": "system", "content": grounding_prefix}, {"role": "user", "content": prompt}],
                     temperature=settings.ai_temperature,
-                    max_tokens=settings.ai_max_tokens
+                    max_tokens=max(round_tokens, settings.ai_max_tokens),
                 )
                 self._mark_red_flag_options(result)
                 duration = int((time.time() - start) * 1000)
@@ -118,6 +125,49 @@ GROUNDING RULES:
                         f"The AI returned an unusable response for round {round_number} "
                         f"after {self.MAX_RETRIES} attempts. Try again. ({msg[:150]})"
                     )
+
+    async def assess_sufficiency(self, patient_ctx: dict, specialty: str) -> SufficiencyAssessment:
+        """After the mandatory rounds, judge whether the intake is complete enough
+        for a safe physician brief."""
+        prompt = self.prompts.get_sufficiency_prompt(
+            session_answers=self.session_answers.dict(),
+            patient_ctx=patient_ctx,
+            flags_raised=list(self.session_answers.flags_raised),
+            specialty=specialty,
+        )
+        try:
+            return await self.llm_client.generate_structured(
+                response_model=SufficiencyAssessment,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=512, temperature=0.0,
+            )
+        except Exception as e:
+            logger.warning(f"Sufficiency assessment failed ({e}); assuming sufficient.")
+            return SufficiencyAssessment(sufficient_for_brief=True,
+                                         reason="assessment unavailable")
+
+    async def next_step(self, round_number: int, visit_type: str,
+                        patient_ctx: dict, specialty: str) -> dict:
+        """Decide what happens after `round_number` was just submitted.
+
+        Returns {"action": "round", "round": N, "focus": {...}}  or
+                {"action": "complete", "assessment": {...}}
+        """
+        if round_number < self.MANDATORY_ROUNDS:
+            return {"action": "round", "round": round_number + 1, "focus": None}
+
+        if round_number >= self.MAX_ROUNDS:
+            return {"action": "complete",
+                    "assessment": {"sufficient_for_brief": True,
+                                   "reason": f"reached the {self.MAX_ROUNDS}-round limit"}}
+
+        assessment = await self.assess_sufficiency(patient_ctx, specialty)
+        self.raw_llm_log.append({"round": round_number, "step": "sufficiency",
+                                 "assessment": assessment.model_dump()})
+        if assessment.sufficient_for_brief:
+            return {"action": "complete", "assessment": assessment.model_dump()}
+        return {"action": "round", "round": round_number + 1,
+                "focus": assessment.model_dump()}
 
     def submit_round_answers(self, round_number: int, answers: dict, scoring_tool_id: str = None,
                              questions: list = None):

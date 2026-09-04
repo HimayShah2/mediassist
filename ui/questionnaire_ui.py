@@ -108,12 +108,14 @@ class QuestionnaireUI(QWidget):
         self.current_round = 1
         self.load_round(1)
 
-    def load_round(self, round_number: int):
+    def load_round(self, round_number: int, focus: dict = None):
         """Spawns a worker to generate the next round."""
         self.btn_submit.setEnabled(False)
         self._gen_round_number = round_number
+        self._gen_focus = focus
         self._gen_elapsed = 0
-        self.btn_submit.setText(f"Generating Round {round_number}…  (0s — the local AI can take a few minutes)")
+        kind = "Follow-up round" if round_number > 4 else "Round"
+        self.btn_submit.setText(f"Generating {kind} {round_number}…  (0s — the local AI can take a few minutes)")
 
         if not hasattr(self, "_gen_timer"):
             from PySide6.QtCore import QTimer
@@ -128,6 +130,7 @@ class QuestionnaireUI(QWidget):
             getattr(self, "visit_type", "General/Routine Checkup"),
             getattr(self, "patient_ctx", {}),
             getattr(self, "specialty", "General Medicine"),
+            focus=focus,
         )
         self.worker.round_generated.connect(self.on_round_generated)
         self.worker.error_occurred.connect(self.on_error)
@@ -135,8 +138,9 @@ class QuestionnaireUI(QWidget):
 
     def _tick_generating(self):
         self._gen_elapsed += 1
+        kind = "Follow-up round" if self._gen_round_number > 4 else "Round"
         self.btn_submit.setText(
-            f"Generating Round {self._gen_round_number}…  ({self._gen_elapsed}s — the local AI can take a few minutes)"
+            f"Generating {kind} {self._gen_round_number}…  ({self._gen_elapsed}s — the local AI can take a few minutes)"
         )
 
     @Slot(QuestionnaireRound)
@@ -225,14 +229,34 @@ class QuestionnaireUI(QWidget):
                 return
             # else fall through and continue
 
-        # Advance to next round or vitals
-        if self.current_round_data.round_number < 4:
-            self.load_round(self.current_round_data.round_number + 1)
-        else:
-            self.btn_submit.setText("Intake Complete - Processing Vitals")
-            self.btn_submit.setEnabled(False)
-            # Signal to main window to switch to Vitals form
-            self.session_complete.emit()
+        # Decide the next step: another mandatory round, an adaptive follow-up
+        # round, or done. The sufficiency check is an LLM call -> off-thread.
+        self.btn_submit.setEnabled(False)
+        rn = self.current_round_data.round_number
+        if rn < 4:
+            self.load_round(rn + 1)
+            return
+
+        self.btn_submit.setText("Reviewing answers — deciding if more questions are needed…")
+        from ui.workers.questionnaire_worker import NextStepWorker
+        self._step_worker = NextStepWorker(
+            self.controller, rn,
+            getattr(self, "visit_type", "General/Routine Checkup"),
+            getattr(self, "patient_ctx", {}),
+            getattr(self, "specialty", "General Medicine"),
+        )
+        self._step_worker.advance.connect(self._on_advance_round)
+        self._step_worker.complete.connect(self._on_intake_sufficient)
+        self._step_worker.error_occurred.connect(lambda _m: self._on_intake_sufficient({}))
+        self._step_worker.start()
+
+    def _on_advance_round(self, round_number: int, focus: object):
+        self.load_round(round_number, focus=focus if isinstance(focus, dict) else None)
+
+    def _on_intake_sufficient(self, assessment: object):
+        self.btn_submit.setText("Intake Complete - Processing Vitals")
+        self.btn_submit.setEnabled(False)
+        self.session_complete.emit()
 
     def on_error(self, error_msg: str):
         if hasattr(self, "_gen_timer"):

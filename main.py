@@ -17,11 +17,37 @@ load_dotenv()
 from app_controller import AppController
 from ui.main_window import MainWindow
 
+def _selftest():
+    """Headless smoke test of the packaged build: init + one round + one brief."""
+    import asyncio
+    from app_controller import AppController
+    from models.questionnaire import SessionAnswers
+    c = AppController(splash_callback=lambda m: print("  ", m))
+    c.initialize()
+
+    async def go():
+        r = await c.questionnaire_engine.generate_round(
+            1, "Specific Complaint / Acute Visit",
+            {"demographics": "55M", "chief_complaint_summary": "chest pain"}, "Cardiology")
+        print(f"ROUND OK: {len(r.questions)} questions, "
+              f"{sum(len(q.options or []) for q in r.questions)} options")
+        b = await c.report_generator.generate(
+            "SELFTEST", SessionAnswers(round_1={"q": "chest pain"}),
+            {"chief_complaint_summary": "chest pain"}, {"heart_rate": "99"}, [], "Cardiology")
+        print(f"BRIEF OK: {len(b.differentials)} differentials")
+
+    asyncio.run(go())
+    print("SELFTEST PASSED")
+
+
 def main():
     """
     MediAssist Pro - Main Entry Point.
     Following Blueprint Section 14.1
     """
+    if "--selftest" in sys.argv:
+        _selftest()
+        return
     # High DPI support for modern Windows displays
     QApplication.setAttribute(Qt.AA_EnableHighDpiScaling)
     QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps)

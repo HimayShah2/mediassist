@@ -37,7 +37,7 @@ CONTEXT:
 - Previous Answers: {session_answers}
 
 INSTRUCTIONS:
-- Generate 6-8 questions for Round {round_number}.
+- Generate exactly 5 questions for Round {round_number} (concise — this runs on a local CPU model).
 - Round 1: Focus on Triage & Chief Complaint.{history_instruction}
 - Round 2: Focus on Symptom Characterization (OPQRST).{citation_instruction}
 - Round 3: Focus on History, Meds, Allergies, Risk Factors.{citation_instruction}

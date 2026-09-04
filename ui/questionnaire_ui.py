@@ -111,21 +111,38 @@ class QuestionnaireUI(QWidget):
     def load_round(self, round_number: int):
         """Spawns a worker to generate the next round."""
         self.btn_submit.setEnabled(False)
-        self.btn_submit.setText(f"Generating Round {round_number}...")
-        
+        self._gen_round_number = round_number
+        self._gen_elapsed = 0
+        self.btn_submit.setText(f"Generating Round {round_number}…  (0s — the local AI can take a few minutes)")
+
+        if not hasattr(self, "_gen_timer"):
+            from PySide6.QtCore import QTimer
+            self._gen_timer = QTimer(self)
+            self._gen_timer.setInterval(1000)
+            self._gen_timer.timeout.connect(self._tick_generating)
+        self._gen_timer.start()
+
         self.worker = QuestionnaireWorker(
-            self.controller, 
-            round_number, 
-            self.visit_type, 
-            self.patient_ctx, 
-            self.specialty
+            self.controller,
+            round_number,
+            getattr(self, "visit_type", "General/Routine Checkup"),
+            getattr(self, "patient_ctx", {}),
+            getattr(self, "specialty", "General Medicine"),
         )
         self.worker.round_generated.connect(self.on_round_generated)
         self.worker.error_occurred.connect(self.on_error)
         self.worker.start()
 
+    def _tick_generating(self):
+        self._gen_elapsed += 1
+        self.btn_submit.setText(
+            f"Generating Round {self._gen_round_number}…  ({self._gen_elapsed}s — the local AI can take a few minutes)"
+        )
+
     @Slot(QuestionnaireRound)
     def on_round_generated(self, round_data: QuestionnaireRound):
+        if hasattr(self, "_gen_timer"):
+            self._gen_timer.stop()
         self.current_round_data = round_data
         self.render_round(round_data)
         self.btn_submit.setText(f"Submit Round {round_data.round_number}")
@@ -163,8 +180,9 @@ class QuestionnaireUI(QWidget):
         elif question.type == OptionType.TEXT:
             return OPENTEXT(question)
         else:
-            logger.warning(f"Unsupported question type: {question.type}")
-            return None
+            # BODY_MAP or any future/unknown type -> free-text fallback so it stays answerable
+            logger.warning(f"No dedicated widget for {question.type}; using text fallback")
+            return OPENTEXT(question)
 
     def submit_round(self):
         """Collects answers and submits to engine."""
@@ -205,6 +223,18 @@ class QuestionnaireUI(QWidget):
             self.session_complete.emit()
 
     def on_error(self, error_msg: str):
+        if hasattr(self, "_gen_timer"):
+            self._gen_timer.stop()
         QMessageBox.critical(self, "Generation Error", f"Failed to generate round: {error_msg}")
         self.btn_submit.setText("Retry Generation")
         self.btn_submit.setEnabled(True)
+        try:
+            self.btn_submit.clicked.disconnect()
+        except Exception:
+            pass
+        self.btn_submit.clicked.connect(self._retry_generation)
+
+    def _retry_generation(self):
+        self.btn_submit.clicked.disconnect()
+        self.btn_submit.clicked.connect(self.submit_round)
+        self.load_round(getattr(self, "_gen_round_number", 1))

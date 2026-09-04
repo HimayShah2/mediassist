@@ -88,11 +88,26 @@ class VitalSignsManager(QWidget):
 
     def _on_generate_clicked(self):
         self.btn_generate.setEnabled(False)
-        self.btn_generate.setText("Generating Physician Brief… (this can take several minutes)")
-        self.status_label.setText("The local AI model is analysing the intake. Please wait.")
+        self.btn_generate.setText("Generating Physician Brief…")
+        self._elapsed = 0
+        if not hasattr(self, "_timer"):
+            from PySide6.QtCore import QTimer
+            self._timer = QTimer(self)
+            self._timer.setInterval(1000)
+            self._timer.timeout.connect(self._tick)
+        self._timer.start()
+        self.status_label.setText("The local AI is analysing the intake (brief + consensus + coding). "
+                                  "This can take several minutes — 0s")
         self.vitals_submitted.emit(self.get_vitals())
 
+    def _tick(self):
+        self._elapsed += 1
+        self.status_label.setText("The local AI is analysing the intake (brief + consensus + coding). "
+                                  f"This can take several minutes — {self._elapsed}s")
+
     def reset_generate_button(self):
+        if hasattr(self, "_timer"):
+            self._timer.stop()
         self.btn_generate.setEnabled(True)
         self.btn_generate.setText("Confirm Vitals && Generate Physician Brief")
         self.status_label.setText("")

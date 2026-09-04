@@ -14,8 +14,8 @@ from .red_flag_detector import RedFlagDetector
 class QuestionnaireEngine:
     MAX_RETRIES = 2
     MANDATORY_ROUNDS = 4      # always asked, in full
-    MAX_ROUNDS = 8            # 4 mandatory + up to 4 focused follow-ups
-    MAX_FOLLOWUPS_PER_FOCUS = 2   # stop re-asking about the same unresolved flags
+    MAX_FOLLOWUPS = 2        # focused follow-up rounds after the mandatory 4
+    MAX_ROUNDS = MANDATORY_ROUNDS + MAX_FOLLOWUPS   # absolute ceiling
 
     def __init__(self, llm_client: ServerLLMClient, doc_manager: DocumentManager):
         self.llm_client       = llm_client
@@ -205,17 +205,21 @@ GROUNDING RULES:
         if round_number < self.MANDATORY_ROUNDS:
             return {"action": "round", "round": round_number + 1, "focus": None}
 
-        if round_number >= self.MAX_ROUNDS:
+        followups_done = round_number - self.MANDATORY_ROUNDS
+
+        # Absolute ceiling: 4 mandatory + MAX_FOLLOWUPS. Anything still unresolved is
+        # carried into the brief as residual uncertainty for the physician — endless
+        # rephrased questions help nobody.
+        if followups_done >= self.MAX_FOLLOWUPS or round_number >= self.MAX_ROUNDS:
+            note = ("Follow-up rounds exhausted; remaining uncertainty is noted for the physician."
+                    if followups_done else f"reached the {self.MAX_ROUNDS}-round limit")
             return {"action": "complete",
-                    "assessment": {"sufficient_for_brief": True,
-                                   "reason": f"reached the {self.MAX_ROUNDS}-round limit"}}
+                    "assessment": {"sufficient_for_brief": True, "reason": note}}
 
         assessment = await self.assess_sufficiency(patient_ctx, specialty)
         self.raw_llm_log.append({"round": round_number, "step": "sufficiency",
                                  "assessment": assessment.model_dump()})
 
-        # Guard against the assessment repeatedly failing and driving rounds to the cap:
-        # only allow the "unavailable -> do a follow-up" fallback once.
         if "unavailable" in assessment.reason.lower():
             if getattr(self, "_assessment_fallback_used", False):
                 return {"action": "complete", "assessment": assessment.model_dump()}
@@ -223,15 +227,6 @@ GROUNDING RULES:
 
         if assessment.sufficient_for_brief:
             return {"action": "complete", "assessment": assessment.model_dump()}
-
-        # Stop re-asking about the same unresolved flags after a couple of tries —
-        # some flags simply can't be characterised further by questionnaire alone.
-        key = tuple(sorted(str(f).lower()[:40] for f in assessment.unresolved_flags))
-        history = getattr(self, "_focus_history", [])
-        if key and history.count(key) >= self.MAX_FOLLOWUPS_PER_FOCUS:
-            assessment.reason += " (follow-up limit for these flags reached; flagging for the physician)"
-            return {"action": "complete", "assessment": assessment.model_dump()}
-        self._focus_history = history + [key]
 
         return {"action": "round", "round": round_number + 1,
                 "focus": assessment.model_dump()}

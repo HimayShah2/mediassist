@@ -243,5 +243,36 @@ class PatientView(QWidget):
         
         visit_type = self.visit_type_combo.currentText()
         specialty = self.specialty_combo.currentText()
-        
+
+        # Persist / update the patient record so it shows up in the dashboard & fetch
+        self._save_patient(case_num, first_name, last_name, age, sex)
+
         self.start_intake_requested.emit(visit_type, patient_ctx, specialty)
+
+    def _save_patient(self, case_num, first_name, last_name, age, sex):
+        if not self.controller:
+            return
+        try:
+            import datetime
+            from models.db_models import Patient
+            dob = (datetime.date.today() - datetime.timedelta(days=int(age) * 365)).isoformat()
+            session = self.controller.get_db_session()
+            try:
+                p = session.query(Patient).filter(Patient.case_number == case_num).first()
+                if p is None:
+                    p = Patient(case_number=case_num,
+                                first_name=first_name or "Unknown",
+                                last_name=last_name or "Patient",
+                                date_of_birth=dob, gender=sex or "unknown")
+                    session.add(p)
+                else:
+                    if first_name:
+                        p.first_name = first_name
+                    if last_name:
+                        p.last_name = last_name
+                    p.gender = sex or p.gender
+                session.commit()
+            finally:
+                session.close()
+        except Exception as e:
+            logger.warning(f"Could not persist patient {case_num}: {e}")

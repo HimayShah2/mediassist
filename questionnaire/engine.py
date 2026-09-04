@@ -92,6 +92,7 @@ GROUNDING RULES:
                     temperature=settings.ai_temperature,
                     max_tokens=settings.ai_max_tokens
                 )
+                self._mark_red_flag_options(result)
                 duration = int((time.time() - start) * 1000)
                 result.generation_time_ms = duration
                 result.model_used         = "local-model"
@@ -153,6 +154,26 @@ GROUNDING RULES:
         # Only true RED flags escalate to an emergency stop; AMBER is recorded but not blocking.
         emergency = any("RED FLAG" in f.upper() for f in flags)
         return {"emergency": emergency, "flags": flags}
+
+    def _mark_red_flag_options(self, round_result):
+        """Deterministic safety net: the LLM often forgets to set is_red_flag under
+        grammar-constrained decoding. Flag any option whose label (or its question
+        text) contains a known emergency phrase."""
+        kws = self.flag_detector.EMERGENCY_KEYWORDS
+        AFFIRM = ("yes", "present", "severe", "currently", "positive")
+        for q in round_result.questions:
+            qtext = (q.text or "").lower()
+            q_names_emergency = any(kw in qtext for kw in kws)
+            for opt in (q.options or []):
+                label = opt.label.lower().strip()
+                if any(neg in label for neg in ("no ", "none", "not ", "denies", "absent", "never")) or label == "no":
+                    continue
+                # emergency phrase in the option text itself
+                if any(kw in label for kw in kws):
+                    opt.is_red_flag = True
+                # or an affirmative answer to a yes/no question that names an emergency
+                elif q_names_emergency and (label in AFFIRM or label.startswith("yes")):
+                    opt.is_red_flag = True
 
     @staticmethod
     def _resolve_score_values(answers: dict, questions: list) -> list:

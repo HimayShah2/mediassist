@@ -231,9 +231,48 @@ class MainWindow(QMainWindow):
                 case_number=case_number,
             )
 
+        self._save_encounter(case_number, payload, vitals=self.vital_signs_view.get_vitals())
+
         self.report_viewer.load_brief(payload)
         self.physician_view.refresh_data()
         self.stacked_widget.setCurrentWidget(self.report_viewer)
+
+    def _save_encounter(self, case_number, payload, vitals):
+        """Write an Encounter row so the dashboard / patient history reflect the visit."""
+        try:
+            import json as _json
+            from models.db_models import Patient, Encounter
+            engine = self.controller.questionnaire_engine
+            case = self.active_case or {}
+            diffs = payload.get("differentials", [])
+            top = ", ".join(
+                (d.get("condition_name") if isinstance(d, dict) else str(d)) for d in diffs[:3]
+            )
+            summary = f"Top differentials: {top}. Confidence {payload.get('confidence_score', 0):.0%}."
+            session = self.controller.get_db_session()
+            try:
+                pat = session.query(Patient).filter(Patient.case_number == case_number).first()
+                if pat is None:
+                    pat = Patient(case_number=case_number, first_name="Unknown", last_name="Patient",
+                                  date_of_birth="1970-01-01", gender="unknown")
+                    session.add(pat); session.flush()
+                enc = Encounter(
+                    patient_id=pat.id,
+                    case_number=case_number,
+                    encounter_type=case.get("visit_type", "intake"),
+                    chief_complaint=case.get("patient_ctx", {}).get("chief_complaint_summary"),
+                    triage_category="EMERGENCY" if payload.get("is_emergency") else "ROUTINE",
+                    vitals_json=_json.dumps(vitals or {}),
+                    questionnaire_json=_json.dumps(getattr(engine.session_answers, "model_dump", dict)()
+                                                  if hasattr(engine.session_answers, "model_dump") else {}, default=str),
+                    ai_summary=summary,
+                )
+                session.add(enc)
+                session.commit()
+            finally:
+                session.close()
+        except Exception as e:
+            logger.warning(f"Could not persist encounter for {case_number}: {e}")
 
     def _open_saved_report(self, case_number: str):
         import os, json

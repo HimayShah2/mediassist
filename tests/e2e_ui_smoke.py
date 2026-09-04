@@ -32,7 +32,7 @@ def build_round(round_number):
     qs = [
         Question(question_id=f"r{round_number}_radio", round=round_number,
                  text="Do you have a fever?", type=OptionType.RADIO,
-                 options=[MCQOption(id="yes", label="Yes", is_red_flag=(round_number == 1)),
+                 options=[MCQOption(id="yes", label="Yes"),
                           MCQOption(id="no", label="No")]),
         Question(question_id=f"r{round_number}_check", round=round_number,
                  text="Select any that apply", type=OptionType.CHECKBOX,
@@ -69,6 +69,9 @@ def main():
     # neutralise blocking dialogs
     for m in ("information", "warning", "critical", "question"):
         setattr(W.QMessageBox, m, staticmethod(lambda *a, **k: W.QMessageBox.StandardButton.Yes))
+    W.QMessageBox.exec = lambda self, *a, **k: 0
+    W.QMessageBox.exec_ = lambda self, *a, **k: 0
+    W.QDialog.exec = lambda self, *a, **k: 0
 
     app = W.QApplication(sys.argv)
 
@@ -110,10 +113,13 @@ def main():
 
     q = win.questionnaire_view
 
+    import time as _t
+
     def run_round():
-        # wait for the (mocked, sync-ish) worker
-        for _ in range(200):
+        q.current_round_data = None
+        for _ in range(500):
             app.processEvents()
+            _t.sleep(0.02)
             if q.current_round_data is not None and q.btn_submit.isEnabled():
                 break
         assert q.current_round_data is not None, "round did not load"
@@ -165,6 +171,17 @@ def main():
 
     check("report viewer populated",
           lambda: win.report_viewer.load_brief(build_brief().model_dump(mode="json")))
+    def _db_has_rows():
+        from database.connection import get_session
+        from models.db_models import Patient, Encounter
+        with get_session() as s:
+            assert s.query(Patient).filter(Patient.case_number == case_no).first(), "no Patient row"
+            assert s.query(Encounter).filter(Encounter.case_number == case_no).first(), "no Encounter row"
+    check("patient + encounter persisted to DB", _db_has_rows)
+    check("dashboard shows the visit",
+          lambda: (win.navigate_to("dashboard"), win.dashboard_view.refresh_data(),
+                   (_ for _ in ()).throw(AssertionError("dashboard patient count still 0"))
+                   if win.dashboard_view.lbl_active_val.text() == "0" else None))
     check("physician dashboard refresh", win.physician_view.refresh_data)
     check("open saved report", lambda: win._open_saved_report(case_no))
     check("logout", win._on_logout)

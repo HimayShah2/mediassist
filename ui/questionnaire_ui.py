@@ -209,9 +209,21 @@ class QuestionnaireUI(QWidget):
         )
         
         if result.get("emergency"):
-            QMessageBox.critical(self, "EMERGENCY", f"Red flags detected: {', '.join(result['flags'])}")
-            # Handle emergency transition
-            return
+            flags = "\n  • ".join(result["flags"])
+            box = QMessageBox(self)
+            box.setIcon(QMessageBox.Critical)
+            box.setWindowTitle("RED FLAG DETECTED")
+            box.setText(f"Emergency indicators found:\n\n  • {flags}\n\n"
+                        "Escalate to a clinician now, or continue the intake?")
+            escalate = box.addButton("Escalate now (skip to brief)", QMessageBox.AcceptRole)
+            cont = box.addButton("Continue intake", QMessageBox.RejectRole)
+            box.exec()
+            if box.clickedButton() is escalate:
+                self.btn_submit.setText("Escalating — generating brief…")
+                self.btn_submit.setEnabled(False)
+                self.session_complete.emit()
+                return
+            # else fall through and continue
 
         # Advance to next round or vitals
         if self.current_round_data.round_number < 4:

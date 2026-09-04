@@ -36,17 +36,20 @@ class PromptTemplates:
 
         if is_followup:
             focus = focus or {}
-            focus_block = (
-                f"\nThis is FOCUSED FOLLOW-UP round {round_number}. The mandatory 4-round intake is "
-                "complete but the picture is not yet clear enough for a safe physician brief.\n"
+            task_line = (
+                f"\nThis is FOCUSED FOLLOW-UP round {round_number}. The 4 mandatory rounds are done "
+                "but the picture is not yet clear enough for a safe physician brief.\n"
                 f"- Still to clarify: {focus.get('focus_areas', [])}\n"
                 f"- Flags not yet characterised: {focus.get('unresolved_flags', [])}\n"
-                f"- Leading differentials to separate: {focus.get('leading_differentials', [])}\n"
-                "- Ask 3-6 highly targeted questions that directly resolve the above. "
-                "Do NOT repeat questions already answered. Prioritise anything that changes "
-                "urgency or the top diagnosis."
+                f"- Leading differentials to separate: {focus.get('leading_differentials', [])}\n\n"
+                "The 'Previous Answers' section above lists every question already asked and its "
+                "answer. You MUST NOT ask any question that is the same as, or a rephrasing of, one "
+                "already there — the patient has answered it. Instead ask NEW, more specific "
+                "questions (2-5) that move the above items forward, e.g. timing/onset details, "
+                "associated features, response to interventions, or a discriminating exam-history "
+                "point. If a flag genuinely cannot be characterised further by questioning, do not "
+                "ask about it again."
             )
-            task_line = focus_block
         else:
             task_line = f"""- Generate 6-10 thorough questions for Round {round_number}. Be comprehensive — a doctor
   will rely on this; missing a key question is worse than asking one extra.

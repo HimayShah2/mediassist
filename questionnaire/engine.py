@@ -14,7 +14,8 @@ from .red_flag_detector import RedFlagDetector
 class QuestionnaireEngine:
     MAX_RETRIES = 2
     MANDATORY_ROUNDS = 4      # always asked, in full
-    MAX_ROUNDS = 10          # hard safety cap on adaptive follow-ups
+    MAX_ROUNDS = 8            # 4 mandatory + up to 4 focused follow-ups
+    MAX_FOLLOWUPS_PER_FOCUS = 2   # stop re-asking about the same unresolved flags
 
     def __init__(self, llm_client: ServerLLMClient, doc_manager: DocumentManager):
         self.llm_client       = llm_client
@@ -26,6 +27,7 @@ class QuestionnaireEngine:
         self.raw_rag_log      = []    # Stored for physician raw data access
         self._round_questions = {}    # round_number -> [Question], for scoring/flag resolution
         self._assessment_fallback_used = False
+        self._focus_history = []
 
     async def generate_round(self, round_number: int, visit_type: str,
                               patient_ctx: dict, specialty: str,
@@ -62,12 +64,17 @@ class QuestionnaireEngine:
         self.raw_rag_log.extend(rag_chunks)
         rag_text    = "\n\n".join([f"SOURCE [{c.get('metadata', {}).get('source_file', 'unknown')}]: {c['text']}" for c in rag_chunks[:5]])
 
+        # For follow-up rounds pass a readable Q->answer digest so the model can
+        # SEE what has already been asked and not repeat itself.
+        answers_ctx = (self._answer_digest() if round_number > self.MANDATORY_ROUNDS
+                       else self.session_answers.dict())
+
         prompt      = self.prompts.get_round_prompt(
             round_number=round_number,
             visit_type=visit_type,
             specialty=specialty,
             patient_ctx=patient_ctx,
-            session_answers=self.session_answers.dict(),
+            session_answers=answers_ctx,
             rag_context=rag_text,
             focus=focus,
         )
@@ -215,6 +222,16 @@ GROUNDING RULES:
 
         if assessment.sufficient_for_brief:
             return {"action": "complete", "assessment": assessment.model_dump()}
+
+        # Stop re-asking about the same unresolved flags after a couple of tries —
+        # some flags simply can't be characterised further by questionnaire alone.
+        key = tuple(sorted(str(f).lower()[:40] for f in assessment.unresolved_flags))
+        history = getattr(self, "_focus_history", [])
+        if key and history.count(key) >= self.MAX_FOLLOWUPS_PER_FOCUS:
+            assessment.reason += " (follow-up limit for these flags reached; flagging for the physician)"
+            return {"action": "complete", "assessment": assessment.model_dump()}
+        self._focus_history = history + [key]
+
         return {"action": "round", "round": round_number + 1,
                 "focus": assessment.model_dump()}
 

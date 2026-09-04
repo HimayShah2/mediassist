@@ -97,6 +97,58 @@ class SessionAnswers(BaseModel):
     flags_raised: List[str] = []
 
 
+class CompactQuestion(BaseModel):
+    """Token-frugal question shape the LLM fills in — converted to Question afterwards.
+    Small CPU models truncate the full nested schema, so we keep this minimal."""
+    q: str                                            # question text
+    type: Literal["radio", "checkbox", "scale", "text", "date", "duration"] = "radio"
+    opts: List[str] = Field(default_factory=list)     # option labels
+    flag_opts: List[str] = Field(default_factory=list)      # option labels that are RED flags
+    amber_opts: List[str] = Field(default_factory=list)     # option labels that are AMBER flags
+    explain: Optional[str] = None                     # short nurse explanation
+    mandatory: bool = True
+
+
+class CompactRound(BaseModel):
+    questions: List[CompactQuestion]
+    scoring_tool_id: Optional[str] = None
+    working_differentials: Optional[List[str]] = None
+
+    def to_round(self, round_number: int, visit_type: str, specialty: str) -> "QuestionnaireRound":
+        out_qs = []
+        for i, cq in enumerate(self.questions):
+            try:
+                qtype = OptionType(cq.type)
+            except ValueError:
+                qtype = OptionType.RADIO
+            opts = None
+            if cq.opts:
+                flags = {s.strip().lower() for s in cq.flag_opts}
+                ambers = {s.strip().lower() for s in cq.amber_opts}
+                opts = []
+                for j, label in enumerate(cq.opts):
+                    low = label.strip().lower()
+                    opts.append(MCQOption(
+                        id=f"o{j}", label=label,
+                        is_red_flag=low in flags,
+                        is_amber_flag=low in ambers,
+                    ))
+            out_qs.append(Question(
+                question_id=f"r{round_number}_q{i+1}",
+                round=round_number,
+                text=cq.q,
+                type=qtype,
+                options=opts,
+                nurse_explanation=cq.explain,
+                is_mandatory=cq.mandatory,
+            ))
+        return QuestionnaireRound(
+            round_number=round_number, visit_type=visit_type, specialty=specialty,
+            questions=out_qs, scoring_tool_id=self.scoring_tool_id,
+            working_differentials=self.working_differentials,
+        )
+
+
 class SufficiencyAssessment(BaseModel):
     """The engine's judgement, after the mandatory rounds, on whether enough has
     been gathered to hand a safe brief to the physician."""

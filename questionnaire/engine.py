@@ -95,18 +95,19 @@ GROUNDING RULES:
 2. Base your questions on well-established clinical guidelines from your training.
 3. Leave 'rag_context_used' as an empty array. Do NOT fabricate citations.
 """
+        from models.questionnaire import CompactRound
         start = time.time()
         for attempt in range(self.MAX_RETRIES):
             try:
-                # Mandatory rounds are comprehensive (6-10 questions) so give them room;
-                # focused follow-ups are short.
+                # Mandatory rounds are comprehensive so give them room; follow-ups are short.
                 round_tokens = 3072 if round_number <= self.MANDATORY_ROUNDS else 1536
-                result: QuestionnaireRound = await self.llm_client.generate_structured(
-                    response_model=QuestionnaireRound,
+                compact: CompactRound = await self.llm_client.generate_structured(
+                    response_model=CompactRound,
                     messages=[{"role": "system", "content": grounding_prefix}, {"role": "user", "content": prompt}],
                     temperature=settings.ai_temperature,
                     max_tokens=max(round_tokens, settings.ai_max_tokens),
                 )
+                result = compact.to_round(round_number, visit_type, specialty)
                 self._mark_red_flag_options(result)
                 duration = int((time.time() - start) * 1000)
                 result.generation_time_ms = duration
@@ -281,24 +282,29 @@ GROUNDING RULES:
         emergency = any("RED FLAG" in f.upper() for f in flags)
         return {"emergency": emergency, "flags": flags}
 
+    # A SHORT list of unambiguous emergencies — used only as a light safety net on
+    # top of the LLM's own flag_opts. Broad keyword matching over-flags badly.
+    CRITICAL_PHRASES = (
+        "crushing chest", "chest pain radiating", "tearing chest", "ripping",
+        "unable to breathe", "can't breathe", "cannot breathe", "gasping",
+        "unconscious", "passed out", "unresponsive", "not breathing",
+        "blue lips", "bluish lips", "cyanosis", "coughing up blood",
+        "heavy bleeding", "uncontrolled bleeding", "suicidal", "want to end my life",
+        "worst headache of my life", "sudden severe headache", "seizure right now",
+        "face droop", "slurred speech", "one-sided weakness", "anaphylaxis",
+        "no fetal movement",
+    )
+
     def _mark_red_flag_options(self, round_result):
-        """Deterministic safety net: the LLM often forgets to set is_red_flag under
-        grammar-constrained decoding. Flag any option whose label (or its question
-        text) contains a known emergency phrase."""
-        kws = self.flag_detector.EMERGENCY_KEYWORDS
-        AFFIRM = ("yes", "present", "severe", "currently", "positive")
+        """Light safety net over the LLM's own flag_opts: flag an option ONLY when
+        its own label unambiguously names an emergency. Never flag from question
+        text (that flags every 'Yes' on a cardiac form)."""
         for q in round_result.questions:
-            qtext = (q.text or "").lower()
-            q_names_emergency = any(kw in qtext for kw in kws)
             for opt in (q.options or []):
                 label = opt.label.lower().strip()
-                if any(neg in label for neg in ("no ", "none", "not ", "denies", "absent", "never")) or label == "no":
+                if any(neg in label for neg in ("no ", "none", "not ", "denies", "absent", "never", "n/a")):
                     continue
-                # emergency phrase in the option text itself
-                if any(kw in label for kw in kws):
-                    opt.is_red_flag = True
-                # or an affirmative answer to a yes/no question that names an emergency
-                elif q_names_emergency and (label in AFFIRM or label.startswith("yes")):
+                if any(p in label for p in self.CRITICAL_PHRASES):
                     opt.is_red_flag = True
 
     @staticmethod

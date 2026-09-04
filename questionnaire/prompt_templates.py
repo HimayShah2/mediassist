@@ -51,8 +51,10 @@ class PromptTemplates:
                 "ask about it again."
             )
         else:
-            task_line = f"""- Generate 6-10 thorough questions for Round {round_number}. Be comprehensive — a doctor
+            task_line = f"""- Generate 6-8 thorough questions for Round {round_number}. Be comprehensive — a doctor
   will rely on this; missing a key question is worse than asking one extra.
+- Keep each 'nurse_explanation' to at most one short sentence, and omit it entirely for
+  self-explanatory questions.
 - Round 1: Triage & Chief Complaint.{history_instruction}
 - Round 2: Symptom Characterization (full OPQRST).{citation_instruction}
 - Round 3: Past history, medications, allergies, risk factors, relevant family/social history.{citation_instruction}
@@ -74,17 +76,16 @@ CONTEXT:
 INSTRUCTIONS:
 {task_line}
 - Use simple language for patients, but maintain clinical rigor.
-- Provide a 'nurse_explanation' for complex terms.
-- EVERY 'radio' and 'checkbox' question MUST include an 'options' array; each option needs a
-  short 'id' (e.g. "a","b") and a patient-friendly 'label'.
-- On any option that indicates a clinical emergency, set "is_red_flag": true. On a concerning
-  but non-emergency finding, set "is_amber_flag": true.
-- If a standardized assessment is warranted, set 'scoring_tool_id' to one of
-  ["phq9","gcs","apgar","sofa"], make the questions match that scale exactly, and set the
-  integer "value" on every option (e.g. PHQ-9 options carry value 0,1,2,3).
+- Every 'radio' and 'checkbox' question MUST have an "opts" list of patient-friendly answer labels.
+- List any answer label that signals a clinical EMERGENCY in "flag_opts"; list concerning but
+  non-emergency labels in "amber_opts". Use the exact label text.
+- If a standardized assessment fits, set "scoring_tool_id" to one of ["phq9","gcs","apgar","sofa"]
+  and make the questions/answers match that scale.
 
-OUTPUT FORMAT:
-Respond ONLY with a JSON object matching the QuestionnaireRound schema.
+OUTPUT FORMAT — respond with ONE compact JSON object, no extra whitespace or newlines:
+{{"questions":[
+  {{"q":"question text","type":"radio","opts":["Label A","Label B"],"flag_opts":["Label A"],"amber_opts":[],"explain":"short note or omit","mandatory":true}}
+], "scoring_tool_id": null, "working_differentials": null}}
 """
         return base_prompt
 

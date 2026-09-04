@@ -36,7 +36,7 @@ def download_default_model(progress=None) -> str:
 
     target_dir = _models_dir()
     if progress:
-        progress(0.0, f"Downloading AI model ({DEFAULT_FILE}, ~0.9 GB)…")
+        progress(0.0, f"Downloading AI model ({DEFAULT_FILE}, ~0.9 GB). This is a one-time step...")
 
     # huggingface_hub streams with its own bar; we only get start/end signals here.
     path = hf_hub_download(repo_id=DEFAULT_REPO, filename=DEFAULT_FILE,
@@ -52,5 +52,5 @@ def resolve_model_path(progress=None) -> str:
     if p:
         logger.info(f"Using local model: {p}")
         return p
-    logger.warning("No local model found — downloading the default small model.")
+    logger.warning("No local model found - downloading the default small model.")
     return download_default_model(progress=progress)

@@ -68,26 +68,27 @@ class LocalLlamaClient:
         except Exception:
             pass
 
+        schema_str = json.dumps(schema, separators=(",", ":"))
         msgs = list(messages)
-        hint = "\n\nRespond with a single JSON object only. No prose, no markdown fences."
+        hint = ("\n\nReply with ONE compact JSON object matching this schema (no whitespace, "
+                "no newlines, no markdown fences, no prose):\n" + schema_str)
         if msgs and msgs[0].get("role") == "system":
-            msgs[0] = {**msgs[0], "content": msgs[0]["content"] + hint}
+            msgs = [{**msgs[0], "content": msgs[0]["content"] + hint}] + msgs[1:]
         else:
-            msgs.insert(0, {"role": "system", "content": hint.strip()})
+            msgs = [{"role": "system", "content": hint.strip()}] + msgs
 
-        # Attempt 1: grammar-constrained JSON
+        # Attempt 1: JSON-syntax mode only (no schema grammar) — ~4x faster on a
+        # small CPU model; pydantic + the model validators catch structural issues.
         try:
             raw = self._chat(msgs, max_tokens, temperature,
-                             response_format={"type": "json_object", "schema": schema})
+                             response_format={"type": "json_object"})
             return response_model.model_validate_json(self._strip_fences(raw))
         except Exception as e:
-            logger.warning(f"Constrained decode failed ({e}); retrying with schema in prompt.")
+            logger.warning(f"Fast JSON parse failed ({str(e)[:150]}); retrying with grammar-constrained decode.")
 
-        # Attempt 2: schema in prompt, plain JSON mode
-        msgs2 = [{"role": "system",
-                  "content": "Reply with raw JSON matching this schema:\n" + json.dumps(schema, separators=(",", ":"))}] + msgs
-        raw = self._chat(msgs2, max_tokens, temperature,
-                         response_format={"type": "json_object"})
+        # Attempt 2: full grammar-constrained decode — slower but guarantees the shape.
+        raw = self._chat(msgs, max_tokens, temperature,
+                         response_format={"type": "json_object", "schema": schema})
         return response_model.model_validate_json(self._strip_fences(raw))
 
     async def generate_text(self, messages, max_tokens=2048, temperature=0.3):

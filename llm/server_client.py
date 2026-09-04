@@ -18,16 +18,32 @@ DEFAULT_MODEL = os.getenv("LLM_MODEL", "google/gemma-4-e4b")
 
 
 def _tighten_question_schema(schema: dict):
-    """Best-effort: for the QuestionnaireRound schema, drop the `null` branch from
-    a question's `options` so grammar-constrained decoding emits an array (possibly
-    empty, which the model validator then repairs) rather than null."""
+    """Slim the QuestionnaireRound schema before it becomes a decoding grammar.
+
+    Under grammar-constrained decoding the model emits every optional field (as
+    null/false), which on a small CPU model blows the token budget and truncates
+    the JSON mid-object. We drop rarely-used optional fields entirely and force
+    `options` to a plain array so the model doesn't spend tokens on `null`."""
     try:
-        q = schema.get("$defs", {}).get("Question", {})
-        opt = q.get("properties", {}).get("options")
+        defs = schema.get("$defs", {})
+
+        q = defs.get("Question", {})
+        qprops = q.get("properties", {})
+        for drop in ("body_map_region", "triggers_followup", "round"):
+            qprops.pop(drop, None)
+        if isinstance(q.get("required"), list):
+            q["required"] = [r for r in q["required"] if r in qprops]
+        opt = qprops.get("options")
         if isinstance(opt, dict) and "anyOf" in opt:
             arr = next((b for b in opt["anyOf"] if b.get("type") == "array"), None)
             if arr:
-                q["properties"]["options"] = arr
+                qprops["options"] = arr
+
+        mo = defs.get("MCQOption", {})
+        moprops = mo.get("properties", {})
+        moprops.pop("differential_indicator", None)
+        if isinstance(mo.get("required"), list):
+            mo["required"] = [r for r in mo["required"] if r in moprops]
     except Exception:
         pass
 
@@ -66,42 +82,38 @@ class ServerLLMClient:
     async def generate_structured(self, response_model, messages, max_tokens=1024, temperature=0.1):
         """Generate a Pydantic-validated structured response.
 
-        Uses llama.cpp's native JSON-schema-constrained decoding when available
-        (guarantees valid JSON -> no retries, and a much smaller prompt). Falls
-        back to injecting the schema as text if the server rejects response_format.
+        Attempt 1 uses JSON-syntax mode only (fast). Attempt 2 adds full
+        schema-grammar constrained decoding (slower but guarantees the shape).
         """
         schema = response_model.model_json_schema()
         _tighten_question_schema(schema)
+        schema_str = json.dumps(schema, separators=(",", ":"))
 
         augmented = list(messages)
-        hint = "\n\nRespond with a single JSON object only. No prose, no markdown fences."
+        hint = ("\n\nReply with ONE compact JSON object matching this schema (no whitespace, "
+                "no newlines, no markdown fences, no prose):\n" + schema_str)
         if augmented and augmented[0].get("role") == "system":
             augmented[0] = {**augmented[0], "content": augmented[0]["content"] + hint}
         else:
             augmented.insert(0, {"role": "system", "content": hint.strip()})
         lc_messages = self._convert_messages(augmented)
 
-        # --- Attempt 1: grammar-constrained decoding ---
+        # --- Attempt 1: JSON-syntax mode only (fast) ---
+        try:
+            fast = self.llm.bind(max_tokens=max_tokens, temperature=temperature,
+                                 response_format={"type": "json_object"})
+            response = await fast.ainvoke(lc_messages)
+            return response_model.model_validate_json(self._strip_fences(response.content))
+        except Exception as e:
+            logger.warning(f"Fast JSON parse failed ({str(e)[:150]}); retrying grammar-constrained.")
+
+        # --- Attempt 2: full schema-grammar constrained decoding ---
         try:
             constrained = self.llm.bind(
                 max_tokens=max_tokens, temperature=temperature,
                 response_format={"type": "json_object", "schema": schema},
             )
             response = await constrained.ainvoke(lc_messages)
-            return response_model.model_validate_json(self._strip_fences(response.content))
-        except Exception as e:
-            logger.warning(f"Constrained decoding unavailable/failed ({e}); falling back to prompt schema.")
-
-        # --- Attempt 2: schema in the prompt ---
-        schema_str = json.dumps(schema, separators=(",", ":"))
-        injected = list(lc_messages)
-        from langchain_core.messages import SystemMessage
-        injected.insert(0, SystemMessage(content=(
-            "You MUST reply with raw JSON matching this schema exactly:\n" + schema_str
-        )))
-        try:
-            model_instance = self.llm.bind(max_tokens=max_tokens, temperature=temperature)
-            response = await model_instance.ainvoke(injected)
             return response_model.model_validate_json(self._strip_fences(response.content))
         except Exception as e:
             logger.error(f"Structured generation failed: {e}")

@@ -201,3 +201,5 @@ scripts/nsis_portable/
 scripts/nsis/
 *.exe
 !Launch_MediAssist.bat
+
+.secret_key

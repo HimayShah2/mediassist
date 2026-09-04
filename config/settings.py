@@ -1,24 +1,50 @@
+import os
+import secrets
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field
 from typing import Optional
+
+
+def _local_secret_key() -> str:
+    """Never ship a hardcoded secret in source. Read SECRET_KEY from the
+    environment/.env if set; otherwise generate one and cache it in a
+    gitignored local file so it stays stable across restarts."""
+    env_val = os.getenv("SECRET_KEY")
+    if env_val:
+        return env_val
+    path = os.path.join(os.getcwd(), ".secret_key")
+    try:
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as f:
+                val = f.read().strip()
+                if val:
+                    return val
+        val = secrets.token_hex(32)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(val)
+        return val
+    except OSError:
+        return secrets.token_hex(32)  # ephemeral fallback (e.g. read-only fs)
+
 
 class Settings(BaseSettings):
     app_name: str = "MediAssist Pro"
     debug: bool = False
     api_v1_str: str = "/api/v1"
-    
+
     # Database
     database_url: str = "sqlite:///./mediassist.db"
     mediassist_db_path: str = "./mediassist.db"
-    
+
     def get_db_url(self) -> str:
         return self.database_url
-    
+
 
     # Security
-    secret_key: str = "your-super-secret-key-change-in-production"
+    secret_key: str = Field(default_factory=_local_secret_key)
     access_token_expire_minutes: int = 60 * 24 * 8 # 8 days
     field_encryption_key: Optional[str] = None
-    project_root: str = "c:/mediassist"
+    project_root: str = Field(default_factory=os.getcwd)
 
     # RAG Web Search
     trusted_sites: str = "who.int,cdc.gov,nih.gov,nice.org.uk"

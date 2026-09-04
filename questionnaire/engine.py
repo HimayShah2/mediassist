@@ -25,6 +25,7 @@ class QuestionnaireEngine:
         self.raw_llm_log      = []    # Stored for physician raw data access
         self.raw_rag_log      = []    # Stored for physician raw data access
         self._round_questions = {}    # round_number -> [Question], for scoring/flag resolution
+        self._assessment_fallback_used = False
 
     async def generate_round(self, round_number: int, visit_type: str,
                               patient_ctx: dict, specialty: str,
@@ -126,25 +127,65 @@ GROUNDING RULES:
                         f"after {self.MAX_RETRIES} attempts. Try again. ({msg[:150]})"
                     )
 
+    def _answer_digest(self) -> str:
+        """Compact 'question -> chosen label' list across all rounds (the raw
+        session_answers dict is just opaque option ids)."""
+        lines = []
+        sa = self.session_answers.dict()
+        for rn in range(1, self.MAX_ROUNDS + 1):
+            answers = sa.get(f"round_{rn}")
+            if not answers:
+                continue
+            q_by_id = {q.question_id: q for q in self._round_questions.get(rn, [])}
+            for qid, val in answers.items():
+                q = q_by_id.get(qid)
+                if not q:
+                    continue
+                picked = val if isinstance(val, list) else [val]
+                labels = []
+                for opt in (q.options or []):
+                    if str(opt.id) in {str(p) for p in picked} or opt.label in picked:
+                        labels.append(opt.label)
+                ans = ", ".join(labels) or (picked[0] if picked else "")
+                lines.append(f"R{rn}: {q.text[:70]} -> {str(ans)[:60]}")
+        return "\n".join(lines[:60])
+
     async def assess_sufficiency(self, patient_ctx: dict, specialty: str) -> SufficiencyAssessment:
         """After the mandatory rounds, judge whether the intake is complete enough
         for a safe physician brief."""
+        rounds_done = sum(1 for rn in range(1, self.MAX_ROUNDS + 1)
+                          if self.session_answers.dict().get(f"round_{rn}"))
+        questions_asked = sum(len(v) for v in self.session_answers.dict().values()
+                              if isinstance(v, dict))
         prompt = self.prompts.get_sufficiency_prompt(
-            session_answers=self.session_answers.dict(),
+            rounds_done=rounds_done,
+            questions_asked=questions_asked,
             patient_ctx=patient_ctx,
             flags_raised=list(self.session_answers.flags_raised),
             specialty=specialty,
+            answer_digest=self._answer_digest(),
         )
-        try:
-            return await self.llm_client.generate_structured(
-                response_model=SufficiencyAssessment,
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=512, temperature=0.0,
+        for attempt in range(2):
+            try:
+                return await self.llm_client.generate_structured(
+                    response_model=SufficiencyAssessment,
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=1200, temperature=0.0,
+                )
+            except Exception as e:
+                logger.warning(f"Sufficiency assessment attempt {attempt+1} failed ({str(e)[:200]})")
+        # Conservative default when the model can't produce a clean assessment:
+        # if flags were raised, ask one more focused round; otherwise proceed.
+        flags = list(self.session_answers.flags_raised)
+        if flags:
+            return SufficiencyAssessment(
+                sufficient_for_brief=False,
+                reason="Automated review unavailable; flags were raised, so a follow-up round is warranted.",
+                focus_areas=["characterise the raised red/amber flags"],
+                unresolved_flags=[str(f)[:60] for f in flags[:5]],
             )
-        except Exception as e:
-            logger.warning(f"Sufficiency assessment failed ({e}); assuming sufficient.")
-            return SufficiencyAssessment(sufficient_for_brief=True,
-                                         reason="assessment unavailable")
+        return SufficiencyAssessment(sufficient_for_brief=True,
+                                     reason="No flags raised; automated review unavailable.")
 
     async def next_step(self, round_number: int, visit_type: str,
                         patient_ctx: dict, specialty: str) -> dict:
@@ -164,6 +205,14 @@ GROUNDING RULES:
         assessment = await self.assess_sufficiency(patient_ctx, specialty)
         self.raw_llm_log.append({"round": round_number, "step": "sufficiency",
                                  "assessment": assessment.model_dump()})
+
+        # Guard against the assessment repeatedly failing and driving rounds to the cap:
+        # only allow the "unavailable -> do a follow-up" fallback once.
+        if "unavailable" in assessment.reason.lower():
+            if getattr(self, "_assessment_fallback_used", False):
+                return {"action": "complete", "assessment": assessment.model_dump()}
+            self._assessment_fallback_used = True
+
         if assessment.sufficient_for_brief:
             return {"action": "complete", "assessment": assessment.model_dump()}
         return {"action": "round", "round": round_number + 1,

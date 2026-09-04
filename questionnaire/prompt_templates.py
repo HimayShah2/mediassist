@@ -86,27 +86,30 @@ Respond ONLY with a JSON object matching the QuestionnaireRound schema.
         return base_prompt
 
     @staticmethod
-    def get_sufficiency_prompt(session_answers: dict, patient_ctx: dict,
-                               flags_raised: list, specialty: str) -> str:
+    def get_sufficiency_prompt(rounds_done: int, questions_asked: int, patient_ctx: dict,
+                               flags_raised: list, specialty: str,
+                               answer_digest: str = "") -> str:
+        flags = "; ".join(str(f) for f in flags_raised[:20]) or "none"
         return f"""
-You are a senior physician reviewing a completed 4-round intake questionnaire before
-writing a clinical brief. Decide whether enough information has been gathered to hand a
-SAFE brief to the attending doctor, or whether one more focused round of questions is needed.
+You are a senior physician reviewing a completed intake questionnaire before a clinical brief.
+Decide if there is enough information for a SAFE brief, or if ONE more focused round is needed.
 
 SPECIALTY: {specialty}
 PATIENT: {patient_ctx.get('demographics', '')} — {patient_ctx.get('chief_complaint_summary', '')}
-ALL ANSWERS SO FAR: {session_answers}
-FLAGS RAISED DURING INTAKE: {flags_raised}
+ROUNDS COMPLETED: {rounds_done} ({questions_asked} questions answered)
+FLAGS RAISED DURING INTAKE:
+{flags}
+KEY ANSWERS: {answer_digest or 'see flags above'}
 
-Be conservative: if a red/amber flag has NOT been fully characterised, or if two or more
-serious differentials remain roughly equally likely, or if a key discriminating feature is
-still unknown, then it is NOT sufficient.
+Be conservative: NOT sufficient if a red/amber flag is uncharacterised, if 2+ serious
+differentials remain roughly equally likely, or if a key discriminating feature is unknown.
 
-Respond ONLY with JSON matching the SufficiencyAssessment schema:
-- sufficient_for_brief: true only if a doctor could act safely on what is known
-- reason: one sentence
-- focus_areas: specific things a follow-up round should ask about (empty if sufficient)
-- unresolved_flags: raised flags still lacking detail
+Respond ONLY with JSON matching the SufficiencyAssessment schema. Keep EVERY list entry
+under 10 words. At most 5 entries per list.
+- sufficient_for_brief: true only if a doctor could act safely now
+- reason: one short sentence
+- focus_areas: what a follow-up round should ask (empty if sufficient)
+- unresolved_flags: short labels of flags still lacking detail
 - leading_differentials: the 2-4 diagnoses still in contention
 """
 

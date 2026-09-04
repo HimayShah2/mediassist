@@ -157,6 +157,8 @@ class MainWindow(QMainWindow):
             self.controller.questionnaire_engine.session_answers = SessionAnswers()
             self.controller.questionnaire_engine.raw_llm_log = []
             self.controller.questionnaire_engine.raw_rag_log = []
+            self.controller.questionnaire_engine._round_questions = {}
+            self.controller.questionnaire_engine._assessment_fallback_used = False
         except Exception as e:
             logger.warning(f"Could not reset questionnaire engine state: {e}")
         self.questionnaire_view.start_session(visit_type, patient_ctx, specialty)

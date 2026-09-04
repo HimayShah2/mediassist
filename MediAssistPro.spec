@@ -23,12 +23,20 @@ hiddenimports = [
     'llm.local_engine', 'llm.model_bootstrap', 'llm.server_client',
 ]
 
-for pkg in ('chromadb', 'llama_cpp', 'tokenizers', 'onnxruntime', 'huggingface_hub'):
+for pkg in ('chromadb', 'llama_cpp', 'tokenizers', 'huggingface_hub'):
     try:
         d, b, h = collect_all(pkg)
         datas += d; binaries += b; hiddenimports += h
     except Exception:
         pass
+
+# onnxruntime: only the runtime libs + data, NOT collect_all (which drags in the
+# heavy 'onnx' package whose import crashes PyInstaller's analysis).
+try:
+    binaries += collect_dynamic_libs('onnxruntime')
+    datas += collect_data_files('onnxruntime')
+except Exception:
+    pass
 
 a = Analysis(
     ['main.py'],
@@ -37,8 +45,9 @@ a = Analysis(
     datas=datas,
     hiddenimports=hiddenimports,
     hookspath=[],
-    runtime_hooks=[],
-    excludes=['torch', 'transformers', 'scipy', 'sentence-transformers', 'numpy.array_api'],
+    runtime_hooks=['rthook_llama.py'],
+    excludes=['torch', 'transformers', 'scipy', 'sentence-transformers', 'numpy.array_api',
+              'onnx', 'onnx.reference', 'onnxscript', 'sqlcipher3'],
     noarchive=False,
     optimize=0,
 )

@@ -1,7 +1,29 @@
-from PySide6.QtWidgets import (QWidget, QVBoxLayout, QLabel, QHBoxLayout, 
+from PySide6.QtWidgets import (QWidget, QVBoxLayout, QLabel, QHBoxLayout,
                                QPushButton, QFileDialog, QComboBox, QListWidget, QMessageBox, QLineEdit)
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QThread, Signal
 from loguru import logger
+
+
+class _IngestWorker(QThread):
+    done = Signal(dict)
+    failed = Signal(str)
+
+    def __init__(self, doc_manager, collection, file_path=None, url=None):
+        super().__init__()
+        self.doc_manager, self.collection = doc_manager, collection
+        self.file_path, self.url = file_path, url
+
+    def run(self):
+        try:
+            if self.file_path:
+                res = self.doc_manager.ingest_document(self.file_path, self.collection)
+            else:
+                res = self.doc_manager.ingest_url(self.url, self.collection)
+            self.done.emit(res)
+        except Exception as e:
+            logger.exception("ingest failed")
+            self.failed.emit(str(e))
+
 
 class DocumentManagerUI(QWidget):
     def __init__(self, controller=None):
@@ -104,33 +126,39 @@ class DocumentManagerUI(QWidget):
             return
             
         collection = self.collection_combo.currentText()
-        self.btn_ingest.setText("Processing... (This may take a minute)")
+        url = self.url_input.text().strip()
+        if not self.selected_file_path and not url:
+            QMessageBox.warning(self, "Nothing selected", "Choose a file or enter a URL first.")
+            return
+
+        self.btn_ingest.setText("Processing… (runs in the background)")
         self.btn_ingest.setEnabled(False)
-        
-        try:
-            # Force UI update
-            from PySide6.QtWidgets import QApplication
-            QApplication.processEvents()
-            
-            if self.selected_file_path:
-                result = self.controller.doc_manager.ingest_document(
-                    self.selected_file_path, collection
-                )
-            else:
-                url = self.url_input.text().strip()
-                result = self.controller.doc_manager.ingest_url(url, collection)
-                
-            QMessageBox.information(self, "Success", f"Ingested {result['chunks_added']} chunks into '{collection}'.")
-        except Exception as e:
-            logger.exception("Failed to ingest source")
-            QMessageBox.critical(self, "Error", f"Failed to process source:\n{e}")
-        finally:
-            self.btn_ingest.setText("Vectorize Selected Source")
-            self.selected_file_path = None
-            self.selected_file_label.setText("No source selected")
-            self.url_input.clear()
-            self.btn_ingest.setEnabled(False)
-            self._refresh_stats()
+
+        self._ingest_worker = _IngestWorker(
+            self.controller.doc_manager, collection,
+            file_path=self.selected_file_path, url=url or None,
+        )
+        self._ingest_worker.done.connect(self._on_ingest_done)
+        self._ingest_worker.failed.connect(self._on_ingest_failed)
+        self._ingest_worker.start()
+
+    def _on_ingest_done(self, result):
+        QMessageBox.information(self, "Success",
+                               f"Ingested {result.get('chunks_added', 0)} chunks into "
+                               f"'{result.get('collection', '')}'.")
+        self._reset_ingest_ui()
+
+    def _on_ingest_failed(self, msg):
+        QMessageBox.critical(self, "Error", f"Failed to process source:\n{msg}")
+        self._reset_ingest_ui()
+
+    def _reset_ingest_ui(self):
+        self.btn_ingest.setText("Vectorize Selected Source")
+        self.selected_file_path = None
+        self.selected_file_label.setText("No source selected")
+        self.url_input.clear()
+        self.btn_ingest.setEnabled(True)
+        self._refresh_stats()
 
     def _refresh_stats(self):
         self.collection_list.clear()

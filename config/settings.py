@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     # Database
     database_url: str = "sqlite:///./mediassist.db"
     mediassist_db_path: str = "./mediassist.db"
+    mediassist_backup_dir: str = "./data/backups"
 
     def get_db_url(self) -> str:
         return self.database_url

@@ -235,12 +235,43 @@ class PatientView(QWidget):
             "name": f"{first_name} {last_name}".strip() or "Unknown Patient",
             "demographics": f"{age}-year-old {sex}",
             "weight_kg": weight,
-            "chronic_conditions": [], 
+            "chronic_conditions": [],
             "chief_complaint_summary": complaint,
             "no_history_toggle": self.toggle_no_history.isChecked(),
             "allow_all_domains": self.toggle_all_knowledge.isChecked()
         }
-        
+
+        # If the patient has an existing record, pull their real history (chronic
+        # conditions, active meds, allergies, recent diagnoses) into context so the
+        # AI isn't intaking blind. Previously written but never wired up.
+        if self.controller and not self.toggle_no_history.isChecked():
+            try:
+                from patient.history_loader import build_patient_context
+                session = self.controller.get_db_session()
+                try:
+                    history = build_patient_context(case_num, session)
+                finally:
+                    session.close()
+                if "error" not in history:
+                    patient_ctx["chronic_conditions"] = [
+                        c.get("description") for c in history.get("chronic_conditions", [])
+                    ]
+                    patient_ctx["current_medications"] = [
+                        m.get("name") for m in history.get("current_medications", [])
+                    ]
+                    patient_ctx["allergies"] = [
+                        a.get("allergen") for a in history.get("allergies", [])
+                    ]
+                    patient_ctx["recent_diagnoses"] = [
+                        d.get("description") for d in history.get("recent_diagnoses", [])
+                    ]
+                    overdue = [v.get("vaccine") for v in history.get("vaccination_gaps", [])
+                              if v.get("status") == "OVERDUE"]
+                    if overdue:
+                        patient_ctx["overdue_vaccines"] = overdue
+            except Exception as e:
+                logger.warning(f"Could not load patient history for {case_num}: {e}")
+
         visit_type = self.visit_type_combo.currentText()
         specialty = self.specialty_combo.currentText()
 

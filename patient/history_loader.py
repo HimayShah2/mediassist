@@ -21,6 +21,19 @@ from models.db_models import (
     Patient,
     Vaccination,
 )
+
+_DATE_FORMATS = ("%Y-%m-%d",)
+
+
+def _parse_date(value: str) -> Optional[datetime.date]:
+    if not value:
+        return None
+    for fmt in _DATE_FORMATS:
+        try:
+            return datetime.datetime.strptime(value, fmt).date()
+        except ValueError:
+            continue
+    return None
 from patient.patient_manager import PatientManager
 from patient.vaccination_tracker import VaccinationTracker
 
@@ -60,7 +73,7 @@ def build_patient_context(
         "current_medications": _get_current_medications(session, case_number),
         "allergies": _get_allergies(session, case_number),
         "recent_diagnoses": _get_recent_diagnoses(session, case_number),
-        "vaccination_gaps": _get_vaccination_gaps(case_number, age, session),
+        "vaccination_gaps": _get_vaccination_gaps(case_number, age, session, dob=patient.date_of_birth),
     }
 
     logger.debug(
@@ -194,12 +207,25 @@ def _get_vaccination_gaps(
     case_number: str,
     age_years: int,
     session: Session,
+    dob: str | None = None,
 ) -> list[dict[str, Any]]:
-    """Identify overdue vaccines using the VaccinationTracker."""
+    """Identify overdue/upcoming vaccines using the VaccinationTracker."""
     try:
+        birth_date = _parse_date(dob) if dob else None
+        if birth_date is None:
+            # VaccinationTracker needs an exact DOB for the EPI schedule (in months);
+            # falling back to age-in-years is too coarse for infant schedules.
+            return []
+
+        rows = (
+            session.query(Vaccination)
+            .filter(Vaccination.case_number == case_number)
+            .all()
+        )
+        administered = [{"name": v.vaccine_name} for v in rows]
+
         tracker = VaccinationTracker()
-        overdue = tracker.get_overdue_vaccines(case_number, age_years, session)
-        return overdue
+        return tracker.analyze_gaps(birth_date, administered)
     except Exception as exc:
         logger.warning("Failed to compute vaccination gaps: {}", exc)
         return []

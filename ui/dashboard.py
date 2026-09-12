@@ -1,8 +1,9 @@
-from PySide6.QtWidgets import (QWidget, QVBoxLayout, QLabel, QHBoxLayout, 
+from PySide6.QtWidgets import (QWidget, QVBoxLayout, QLabel, QHBoxLayout,
                                QFrame, QGridLayout, QPushButton, QTableWidget, QTableWidgetItem)
 from PySide6.QtCore import Qt
 import datetime
 from sqlalchemy import desc
+from loguru import logger
 
 from database.connection import get_session
 from models.db_models import Patient, Encounter
@@ -65,13 +66,18 @@ class DashboardView(QWidget):
         try:
             with get_session() as db:
                 total_patients = db.query(Patient).count()
-                
+
                 today_start = datetime.datetime.combine(datetime.date.today(), datetime.time.min)
                 encounters_today = db.query(Encounter).filter(Encounter.created_at >= today_start).count()
-                
+                emergency_today = (
+                    db.query(Encounter)
+                    .filter(Encounter.created_at >= today_start, Encounter.triage_category == "EMERGENCY")
+                    .count()
+                )
+
                 self.lbl_active_val.setText(str(total_patients))
                 self.lbl_completed_val.setText(str(encounters_today))
-                self.lbl_alerts_val.setText("0")
+                self.lbl_alerts_val.setText(str(emergency_today))
 
                 recent_encounters = db.query(Encounter).order_by(desc(Encounter.created_at)).limit(10).all()
                 self.table.setRowCount(len(recent_encounters))
@@ -87,4 +93,4 @@ class DashboardView(QWidget):
                     self.table.setItem(row, 2, QTableWidgetItem(vtype))
                     self.table.setItem(row, 3, QTableWidgetItem(status))
         except Exception as e:
-            print(f"Dashboard refresh error: {e}")
+            logger.error(f"Dashboard refresh error: {e}")

@@ -19,24 +19,6 @@ class SettingsUI(QWidget):
         self.title.setObjectName("header_title")
         self.layout.addWidget(self.title)
 
-        # Keys Group
-        self.keys_group = QGroupBox("NVIDIA NIM API Keys")
-        self.keys_layout = QFormLayout()
-        
-        self.key_inputs = []
-        for i in range(1, 8):
-            inp = QLineEdit()
-            inp.setPlaceholderText(f"nvapi-...")
-            inp.setEchoMode(QLineEdit.Password)
-            self.keys_layout.addRow(f"Key {i}:", inp)
-            self.key_inputs.append(inp)
-        
-        self.btn_save_keys = QPushButton("Save API Keys")
-        self.btn_save_keys.setObjectName("action_primary")
-        self.keys_layout.addRow("", self.btn_save_keys)
-        self.keys_group.setLayout(self.keys_layout)
-        self.layout.addWidget(self.keys_group)
-
         # Doctor Field Group
         self.field_group = QGroupBox("Active Doctor Field (Specialty Configuration)")
         self.field_layout = QHBoxLayout()
